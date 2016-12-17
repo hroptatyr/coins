@@ -17,6 +17,17 @@ EXTRA_DIST = $(BUILT_SOURCES)
 CLEANFILES = 
 SUFFIXES =
 
+noinst_PROGRAMS += hitwss
+hitwss_SOURCES = hitwss.c hitwss.yuck
+hitwss_SOURCES += nifty.h
+hitwss_SOURCES += version.c version.h
+hitwss_CPPFLAGS = $(AM_CPPFLAGS)
+hitwss_CPPFLAGS += $(ev_CFLAGS)
+hitwss_LDFLAGS = $(AM_LDFLAGS)
+hitwss_LDFLAGS += $(ev_LIBS)
+BUILT_SOURCES += hitwss.yucc
+
+
 CLEANFILES += version.c
 EXTRA_DIST += version.c.in
 
