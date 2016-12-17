@@ -96,6 +96,18 @@ btsp2b_SOURCES += boobs.h
 btsp2b_SOURCES += nifty.h
 BUILT_SOURCES += btsp2b.yucc
 
+bin_PROGRAMS += bitfin
+bitfin_SOURCES = bitfin.c bitfin.yuck
+bitfin_SOURCES += nifty.h
+bitfin_SOURCES += tls.c tls.h
+bitfin_SOURCES += version.c version.h
+bitfin_CPPFLAGS = $(AM_CPPFLAGS)
+bitfin_CPPFLAGS += $(ev_CFLAGS)
+bitfin_LDFLAGS = $(AM_LDFLAGS)
+bitfin_LDFLAGS += $(ev_LIBS)
+bitfin_LDADD = $(LIBEV_LIBS) -lssl -lcrypto
+BUILT_SOURCES += bitfin.yucc
+
 
 CLEANFILES += version.c
 EXTRA_DIST += version.c.in
