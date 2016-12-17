@@ -17,7 +17,7 @@ EXTRA_DIST = $(BUILT_SOURCES)
 CLEANFILES = 
 SUFFIXES =
 
-noinst_PROGRAMS += hitwss
+bin_PROGRAMS += hitwss
 hitwss_SOURCES = hitwss.c hitwss.yuck
 hitwss_SOURCES += nifty.h
 hitwss_SOURCES += version.c version.h
