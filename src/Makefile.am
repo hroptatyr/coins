@@ -36,6 +36,19 @@ hit2b_SOURCES += boobs.h
 hit2b_SOURCES += nifty.h
 BUILT_SOURCES += hit2b.yucc
 
+bin_PROGRAMS += cexwss
+cexwss_SOURCES = cexwss.c cexwss.yuck
+cexwss_SOURCES += nifty.h
+cexwss_SOURCES += tls.c tls.h
+cexwss_SOURCES += version.c version.h
+cexwss_SOURCES += ../cex_cred.h
+cexwss_CPPFLAGS = $(AM_CPPFLAGS)
+cexwss_CPPFLAGS += $(ev_CFLAGS)
+cexwss_LDFLAGS = $(AM_LDFLAGS)
+cexwss_LDFLAGS += $(ev_LIBS)
+cexwss_LDADD = -lssl -lcrypto
+BUILT_SOURCES += cexwss.yucc
+
 
 CLEANFILES += version.c
 EXTRA_DIST += version.c.in
