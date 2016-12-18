@@ -693,7 +693,8 @@ subscr_coin(EV_P_ coin_ctx_t ctx)
 	}
 
 	for (size_t i = 0U; i < ctx->nsubs; i++) {
-		int len = snprintf(buf, sizeof(buf), MREQ "\r\n", "BTC", "USD");
+		int len = snprintf(buf, sizeof(buf), MREQ "\r\n",
+				   ctx->subs[i] + 0U, ctx->subs[i] + 4U);
 		request_sub(ctx->ss, buf, len);
 	}
 
@@ -882,6 +883,7 @@ main(int argc, char *argv[])
 {
 	static yuck_t argi[1U];
 	struct coin_ctx_s ctx[1U];
+	int rc = EXIT_SUCCESS;
 
 	if (yuck_parse(argi, argc, argv) < 0) {
 		return 1;
@@ -897,6 +899,17 @@ main(int argc, char *argv[])
 	(void)gethostname(hostname, sizeof(hostname));
 	hostnsz = strlen(hostname);
 
+	/* check symbols */
+	for (size_t i = 0U; i < argi->nargs; i++) {
+		if (argi->args[i][3U] != '/' && argi->args[i][3U] != ':') {
+			errno = 0, serror("\
+Error: specify pairs like CCY:CCY");
+			rc = EXIT_FAILURE;
+			goto out;
+		}
+		/* split string in two halves */
+		argi->args[i][3U] = '\0';
+	}
 	/* make sure we won't forget them subscriptions */
 	ctx->subs = argi->args;
 	ctx->nsubs = argi->nargs;
@@ -914,10 +927,11 @@ main(int argc, char *argv[])
 	deinit_ev(EV_A_ ctx);
 	ev_loop_destroy(EV_DEFAULT_UC);
 
+out:
 	/* that's it */
 	close_sock(logfd);
 	yuck_free(argi);
-	return EXIT_SUCCESS;
+	return rc;
 }
 
 /* coin.c ends here */
