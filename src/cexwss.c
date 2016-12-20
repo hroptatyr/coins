@@ -334,7 +334,7 @@ proc_beef(const char *buf, size_t len)
 			break;
 		}
 		if (xmemmem(bp, bz, "ping", 4U)) {
-			preq++;
+			preq += 2;
 		}
 
 		switch (fr->code) {
@@ -396,7 +396,6 @@ reply_heartbeat(ssl_ctx_t ss)
 	static const char pong[] = {0x8a, 0x00};
 
 	tls_send(ss, pong, sizeof(pong), 0);
-	ping--;
 	toout_logline("PONG!", 5U);
 	return;
 }
@@ -499,11 +498,16 @@ ws_cb(EV_P_ ev_io *w, int UNUSED(revents))
 		if ((npr = proc_beef(gbuf, boff + nrd)) < 0) {
 			goto unroll;
 		}
-		if (ping) {
+		if (ping > 0) {
 			reply_heartbeat(ctx->ss);
+			ping--;
+		} else {
+			ping = 0;
 		}
-		if (preq) {
+		if (preq > 0) {
 			pong(ctx);
+			preq--;
+		} else {
 			preq = 0;
 		}
 		/* keep a reference of our time stamp */
@@ -798,6 +802,12 @@ prepare(EV_P_ ev_prepare *w, int UNUSED(revents))
 		/* check if there's messages from the channel */
 		if (tsp->tv_sec - ctx->last_act->tv_sec >= MAX_INACT) {
 			goto unroll;
+		}
+		if (preq > 0) {
+			pong(ctx);
+			preq--;
+		} else {
+			preq = 0;
 		}
 		break;
 
