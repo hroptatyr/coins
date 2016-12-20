@@ -71,6 +71,7 @@ struct coin_ctx_s {
 	/* libev's idea of the socket below */
 	ev_io watcher[1];
 	ev_timer timer[1];
+	ev_timer pongt[1];
 	ev_signal sigi[1];
 	ev_signal sigp[1];
 	ev_signal sigh[1];
@@ -334,7 +335,7 @@ proc_beef(const char *buf, size_t len)
 			break;
 		}
 		if (xmemmem(bp, bz, "ping", 4U)) {
-			preq += 2;
+			preq++;
 		}
 
 		switch (fr->code) {
@@ -492,6 +493,7 @@ ws_cb(EV_P_ ev_io *w, int UNUSED(revents))
 	case COIN_ST_JOIN:
 		/* assume that we've successfully joined */
 		ctx->st = COIN_ST_JOIND;
+		ev_timer_start(EV_A_ ctx->pongt);
 	case COIN_ST_JOIND:;
 		ssize_t npr;
 
@@ -590,6 +592,16 @@ silence_cb(EV_PU_ ev_timer *w, int UNUSED(revents))
 			break;
 		}
 	}
+	return;
+}
+
+static void
+pong_cb(EV_PU_ ev_timer *w, int UNUSED(revents))
+{
+	static void pong(coin_ctx_t ctx);
+	coin_ctx_t ctx = w->data;
+
+	pong(ctx);
 	return;
 }
 
@@ -815,12 +827,6 @@ prepare(EV_P_ ev_prepare *w, int UNUSED(revents))
 		if (tsp->tv_sec - ctx->last_act->tv_sec >= MAX_INACT) {
 			goto unroll;
 		}
-		if (preq > 0) {
-			pong(ctx);
-			preq--;
-		} else {
-			preq = 0;
-		}
 		break;
 
 	case COIN_ST_NODATA:
@@ -867,6 +873,8 @@ init_ev(EV_P_ coin_ctx_t ctx)
 	/* inc nothing counter every 3 seconds */
 	ev_timer_init(ctx->timer, silence_cb, 0.0, TIMEOUT);
 	ctx->timer->data = ctx;
+	ev_timer_init(ctx->pongt, pong_cb, TIMEOUT, TIMEOUT);
+	ctx->pongt->data = ctx;
 
 	/* the midnight tick for file rotation, also upon sighup */
 	ev_periodic_init(ctx->midnight, midnight_cb, MIDNIGHT, ONE_DAY, NULL);
@@ -887,6 +895,7 @@ static void
 deinit_ev(EV_P_ coin_ctx_t ctx)
 {
 	ev_timer_stop(EV_A_ ctx->timer);
+	ev_timer_stop(EV_A_ ctx->pongt);
 	ev_signal_stop(EV_A_ ctx->sigi);
 	ev_signal_stop(EV_A_ ctx->sigp);
 
