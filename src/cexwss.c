@@ -529,6 +529,18 @@ ws_cb(EV_P_ ev_io *w, int UNUSED(revents))
 
 unroll:
 	/* connection reset */
+	toout_logline("restart in 9", 12);
+	sleep(1);
+	toout_logline("restart in 8", 12);
+	sleep(1);
+	toout_logline("restart in 7", 12);
+	sleep(1);
+	toout_logline("restart in 6", 12);
+	sleep(1);
+	toout_logline("restart in 5", 12);
+	sleep(1);
+	toout_logline("restart in 4", 12);
+	sleep(1);
 	toout_logline("restart in 3", 12);
 	sleep(1);
 	toout_logline("restart in 2", 12);
