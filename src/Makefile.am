@@ -81,10 +81,20 @@ btsp_SOURCES = btsp.c btsp.yuck
 btsp_SOURCES += tls.c tls.h
 btsp_SOURCES += version.c version.h
 btsp_SOURCES += boobs.h
+btsp_SOURCES += nifty.h
 btsp_CPPFLAGS = $(AM_CPPFLAGS) $(LIBEV_CPPFLAGS)
 btsp_LDFLAGS = $(AM_LDFLAGS)  $(LIBEV_LDFLAGS)
 btsp_LDADD = $(LIBEV_LIBS) -lssl -lcrypto
 BUILT_SOURCES += btsp.yucc
+
+bin_PROGRAMS += btsp2b
+btsp2b_SOURCES = btsp2b.c btsp2b.yuck
+btsp2b_SOURCES += jsmn.c jsmn.h
+btsp2b_SOURCES += hash.c hash.h
+btsp2b_SOURCES += version.c version.h
+btsp2b_SOURCES += boobs.h
+btsp2b_SOURCES += nifty.h
+BUILT_SOURCES += btsp2b.yucc
 
 
 CLEANFILES += version.c
