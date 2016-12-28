@@ -264,7 +264,7 @@ found:;
 			;
 		} else if (hx == hx_mtch) {
 			/* we can't do with trades yet */
-			goto next;
+			goto tra0;
 		} else {
 			error("\
 Warning: unknown event type `%.*s'",
@@ -314,6 +314,36 @@ Warning: unknown event type `%.*s'",
 		}
 		buf[len++] = '\n';
 		fwrite(buf, 1, len, stdout);
+		goto next;
+
+	tra0:
+		/* we simply expect amount/date/rate/... */
+		i++;
+		if (memcmp(base + toks[i++].start, "data", 4U)) {
+			goto next;
+		} else if (toks[i].type != JSMN_OBJECT) {
+			goto next;
+		}
+		len = ini;
+		len += memncpy(buf + len, "tra0", 4U);
+		buf[len++] = '\t';
+		if (memcmp(base + toks[i + 5U].start, "rate", 4U)) {
+			goto next;
+		}
+		len += memncpy(buf + len,
+			       base + toks[i + 6U].start,
+			       toks[i + 6U].end - toks[i + 6U].start);
+		buf[len++] = '\t';
+		if (memcmp(base + toks[i + 1U].start, "amount", 6U)) {
+			goto next;
+		}
+		len += memncpy(buf + len,
+			       base + toks[i + 2U].start,
+			       toks[i + 2U].end - toks[i + 2U].start);
+		buf[len++] = '\n';
+
+		fwrite(buf, 1, len, stdout);
+		goto next;
 
 	next:
 		/* fast forward past EOT */
