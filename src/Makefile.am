@@ -70,6 +70,15 @@ plxwss_LDFLAGS += $(ev_LIBS)
 plxwss_LDADD = -lssl -lcrypto
 BUILT_SOURCES += plxwss.yucc
 
+bin_PROGRAMS += plx2b
+plx2b_SOURCES = plx2b.c plx2b.yuck
+plx2b_SOURCES += jsmn.c jsmn.h
+plx2b_SOURCES += hash.c hash.h
+plx2b_SOURCES += version.c version.h
+plx2b_SOURCES += boobs.h
+plx2b_SOURCES += nifty.h
+BUILT_SOURCES += plx2b.yucc
+
 
 CLEANFILES += version.c
 EXTRA_DIST += version.c.in

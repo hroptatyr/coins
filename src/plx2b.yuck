@@ -1,0 +1,5 @@
+Usage: plx2b < PLX_STREAM
+
+Turn poloniex websocket data into level-2 book stream.
+The resulting stream will be suitable for processing with the
+books tools.
