@@ -108,6 +108,13 @@ bitfin_LDFLAGS += $(ev_LIBS)
 bitfin_LDADD = $(LIBEV_LIBS) -lssl -lcrypto
 BUILT_SOURCES += bitfin.yucc
 
+bin_PROGRAMS += bitfin2b
+bitfin2b_SOURCES = bitfin2b.c bitfin2b.yuck
+bitfin2b_SOURCES += version.c version.h
+bitfin2b_SOURCES += boobs.h
+bitfin2b_SOURCES += nifty.h
+BUILT_SOURCES += bitfin2b.yucc
+
 
 CLEANFILES += version.c
 EXTRA_DIST += version.c.in
