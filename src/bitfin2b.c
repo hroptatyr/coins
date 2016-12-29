@@ -31,6 +31,13 @@ typedef enum {
 	SIDE_TRA,
 } btf_side_t;
 
+typedef enum {
+	SUBT_UNK,
+	SUBT_BOK,
+	SUBT_TOP,
+	SUBT_TRA,
+} btf_subt_t;
+
 
 static inline size_t
 memncpy(char *restrict tgt, const char *src, size_t len)
@@ -151,6 +158,7 @@ tvtostr(char *restrict buf, size_t bsz, tv_t t)
 
 /* processor */
 static btf_ins_t subins[1U << (sizeof(btf_chid_t) * 8U)];
+static uint8_t subtys[countof(subins)];
 static tv_t metr;
 
 static void
@@ -180,31 +188,42 @@ strtoins(const char *ins, size_t len, btf_chid_t ci)
 	return z;
 }
 
-static inline int
-inssubdp(btf_chid_t ci)
-{
-	return *subins[ci];
-}
-
 static int
 subscr(const char *line, size_t llen)
 {
-	static const char subs[] = "\
+	static const char sbok[] = "\
 \"event\":\"subscribed\",\"channel\":\"book\",\"chanId\":";
+	static const char stop[] = "\
+\"event\":\"subscribed\",\"channel\":\"ticker\",\"chanId\":";
+	static const char stra[] = "\
+\"event\":\"subscribed\",\"channel\":\"trades\",\"chanId\":";
 	static const char pair[] = "\
 \"pair\":";
 	const char *const eol = line + llen;
+	btf_subt_t st;
 	btf_chid_t ci;
 	const char *p, *eop;
 
-	if (llen <= strlenof(subs)) {
+	if (llen <= strlenof(stra)) {
 		return -1;
-	} else if (memcmp(line, subs, strlenof(subs))) {
+	} else if (!memcmp(line, sbok, strlenof(sbok))) {
+		st = SUBT_BOK;
+		/* shrink line to selection */
+		line += strlenof(sbok);
+		llen -= strlenof(sbok);
+	} else if (!memcmp(line, stop, strlenof(stop))) {
+		st = SUBT_TOP;
+		/* shrink line to selection */
+		line += strlenof(stop);
+		llen -= strlenof(stop);
+	} else if (!memcmp(line, stra, strlenof(stra))) {
+		st = SUBT_TRA;
+		/* shrink line to selection */
+		line += strlenof(stra);
+		llen -= strlenof(stra);
+	} else {
 		return -1;
 	}
-	/* otherwise shrink line to selection */
-	line += strlenof(subs);
-	llen -= strlenof(subs);
 	/* ... and snarf channel id */
 	with (long unsigned int x = strtoul(line, NULL, 10)) {
 		ci = (btf_chid_t)x;
@@ -219,14 +238,14 @@ subscr(const char *line, size_t llen)
 	}
 	/* otherwise memorise him */
 	strtoins(p, eop - p, ci);
+	subtys[ci] = (uint8_t)st;
 	return 0;
 }
 
 static int
-events(const char *line, size_t llen)
+evtbok(const char *line, size_t llen, btf_chid_t ci)
 {
 	const char *const eol = line + llen;
-	btf_chid_t ci;
 	char *on = deconst(line);
 	struct {
 		size_t z;
@@ -234,17 +253,10 @@ events(const char *line, size_t llen)
 	} p, q = {1U, "0"};
 	size_t cnt;
 	btf_side_t sd;
+	char buf[256U];
+	size_t len, ini = 0U;
 
-	with (long unsigned int x = strtoul(on, &on, 10)) {
-		if (UNLIKELY(*on++ != ',')) {
-			return -1;
-		}
-		ci = (btf_chid_t)x;
-	}
-	if (UNLIKELY(!inssubdp(ci))) {
-		/* could happen because there's tickers and trades and stuff */
-		return -1;
-	}
+again:
 	/* next up is the price level */
 	if (UNLIKELY((on = memchr(p.s = on, ',', eol - on)) == NULL)) {
 		/* shame that */
@@ -272,26 +284,163 @@ events(const char *line, size_t llen)
 			/* oops, what's wrong now? */
 			return -1;
 		}
-		q.z = on - q.s;
+		q.z = on++ - q.s;
 	}
 	/* we're all set for printing now */
+	switch ((len = ini)) {
+	case 0U:
+		len += tvtostr(buf + len, sizeof(buf) - len, metr);
+		buf[len++] = '\t';
+		len += instostr(buf + len, sizeof(buf) - len, ci);
+		buf[len++] = '\t';
+		ini = len;
+		/* fallthrough */
+	default:
+		buf[len++] = (char)((SIDE_TRA - sd) ^ '@');
+		buf[len++] = '2';
+		buf[len++] = '\t';
+		len += memncpy(buf + len, p.s, p.z);
+		buf[len++] = '\t';
+		len += memncpy(buf + len, q.s, q.z);
+		buf[len++] = '\n';
+
+		fwrite(buf, 1, len, stdout);
+		break;
+	}
+	if (UNLIKELY(*on++ == ',' && *on++ == '[')) {
+		goto again;
+	}
+	return 0;
+}
+
+static int
+evttop(const char *line, size_t llen, btf_chid_t ci)
+{
+	const char *const eol = line + llen;
+	char *on = deconst(line);
+	struct {
+		size_t z;
+		const char *s;
+	} bid, ask, bsz, asz;
+
+	/* next up is the bid+bsz */
+	if (UNLIKELY((on = memchr(bid.s = on, ',', eol - on)) == NULL)) {
+		return -1;
+	}
+	bid.z = on++ - bid.s;
+	/* bid size */
+	if (UNLIKELY((on = memchr(bsz.s = on, ',', eol - on)) == NULL)) {
+		return -1;
+	}
+	bsz.z = on++ - bsz.s;
+	/* next up is the ask+asz */
+	if (UNLIKELY((on = memchr(ask.s = on, ',', eol - on)) == NULL)) {
+		return -1;
+	}
+	ask.z = on++ - ask.s;
+	/* bid size */
+	if (UNLIKELY((on = memchr(asz.s = on, ',', eol - on)) == NULL)) {
+		return -1;
+	}
+	asz.z = on++ - asz.s;
+
+	/* we're not interested in anything else */
+	;
+
+	/* we're all set for printing now */
 	char buf[256U];
-	size_t len = 0U;
+	size_t len = 0U, ini;
 
 	len += tvtostr(buf + len, sizeof(buf) - len, metr);
 	buf[len++] = '\t';
 	len += instostr(buf + len, sizeof(buf) - len, ci);
 	buf[len++] = '\t';
-	buf[len++] = (char)((SIDE_TRA - sd) ^ '@');
-	buf[len++] = '2';
+	buf[ini = len++] = 'B';
+	buf[len++] = '1';
 	buf[len++] = '\t';
-	len += memncpy(buf + len, p.s, p.z);
+	len += memncpy(buf + len, bid.s, bid.z);
 	buf[len++] = '\t';
-	len += memncpy(buf + len, q.s, q.z);
+	len += memncpy(buf + len, bsz.s, bsz.z);
 	buf[len++] = '\n';
+	fwrite(buf, 1, len, stdout);
 
+	/* start over for the ask */
+	len = ini;
+	buf[len++] = 'A';
+	buf[len++] = '1';
+	buf[len++] = '\t';
+	len += memncpy(buf + len, ask.s, ask.z);
+	buf[len++] = '\t';
+	len += memncpy(buf + len, asz.s, asz.z);
+	buf[len++] = '\n';
 	fwrite(buf, 1, len, stdout);
 	return 0;
+}
+
+static int
+evttra(const char *line, size_t llen, btf_chid_t ci)
+{
+	const char *eol = line + llen;
+	char *pr, *on = deconst(line);
+
+	if (memcmp(line, "\"te\"", 4U)) {
+		return -1;
+	}
+	/* find the last `,' the number before is the price,
+	 * the number thereafter the quantity */
+	for (char *x; (x = memchr(on, ',', eol - on)); pr = on, on = x + 1U);
+	if (UNLIKELY((eol = memchr(on, ']', eol - on)) == NULL)) {
+		return -1;
+	}
+
+	/* we're all set for printing now */
+	char buf[256U];
+	size_t len = 0U, ini;
+
+	len += tvtostr(buf + len, sizeof(buf) - len, metr);
+	buf[len++] = '\t';
+	len += instostr(buf + len, sizeof(buf) - len, ci);
+	buf[len++] = '\t';
+	buf[ini = len++] = (char)('T' - (*on == '-'));
+	buf[len++] = '0';
+	buf[len++] = '\t';
+	len += memncpy(buf + len, pr, on - pr - 1U);
+	buf[len++] = '\t';
+	on += *on == '-';
+	len += memncpy(buf + len, on, eol - on);
+	buf[len++] = '\n';
+	fwrite(buf, 1, len, stdout);
+	return 0;
+}
+
+static int
+events(const char *line, size_t llen)
+{
+	const char *const eol = line + llen;
+	btf_chid_t ci;
+	char *on = deconst(line);
+
+	with (long unsigned int x = strtoul(on, &on, 10)) {
+		if (UNLIKELY(*on++ != ',')) {
+			return -1;
+		}
+		ci = (btf_chid_t)x;
+	}
+	switch (subtys[ci]) {
+	case SUBT_BOK:
+		/* books may have arrays of arrays */
+		if (UNLIKELY(*on == '[') && LIKELY(*++on == '[')) {
+			on++;
+		}
+		return evtbok(on, eol - on, ci);
+	case SUBT_TOP:
+		return evttop(on, eol - on, ci);
+	case SUBT_TRA:
+		return evttra(on, eol - on, ci);
+	default:
+		break;
+	}
+	return -1;
 }
 
 static int
