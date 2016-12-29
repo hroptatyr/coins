@@ -26,6 +26,13 @@ coin_LDFLAGS += $(ev_LIBS)
 coin_LDADD = -lssl -lcrypto
 BUILT_SOURCES += coin.yucc
 
+bin_PROGRAMS += coin2b
+coin2b_SOURCES = coin2b.c coin2b.yuck
+coin2b_SOURCES += jsmn.c jsmn.h
+coin2b_SOURCES += hash.c hash.h
+coin2b_SOURCES += version.c version.h
+BUILT_SOURCES += coin2b.yucc
+
 bin_PROGRAMS += hitwss
 hitwss_SOURCES = hitwss.c hitwss.yuck
 hitwss_SOURCES += nifty.h
