@@ -1,0 +1,3 @@
+Usage: coin [INSTR]...
+
+Subscribe to INSTRs on the coinbase exchange.

@@ -14,6 +14,18 @@ EXTRA_DIST = $(BUILT_SOURCES)
 CLEANFILES =
 SUFFIXES =
 
+bin_PROGRAMS += coin
+coin_SOURCES = coin.c coin.yuck
+coin_SOURCES += tls.c tls.h
+coin_SOURCES += nifty.h
+coin_SOURCES += version.c version.h
+coin_CPPFLAGS = $(AM_CPPFLAGS)
+coin_CPPFLAGS += $(ev_CFLAGS)
+coin_LDFLAGS = $(AM_LDFLAGS)
+coin_LDFLAGS += $(ev_LIBS)
+coin_LDADD = -lssl -lcrypto
+BUILT_SOURCES += coin.yucc
+
 bin_PROGRAMS += hitwss
 hitwss_SOURCES = hitwss.c hitwss.yuck
 hitwss_SOURCES += nifty.h
