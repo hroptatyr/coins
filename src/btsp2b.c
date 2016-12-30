@@ -99,44 +99,10 @@ tvtostr(char *restrict buf, size_t bsz, tv_t t)
 	return snprintf(buf, bsz, "%lu.%09lu", t / NSECS, t % NSECS);
 }
 
-static tv_t
-strtons(const char *buf, char **endptr)
+static inline size_t
+tokncpy(char *restrict buf, const char *base, jsmntok_t tok)
 {
-/* interpret BUF (looks like .8455) as subsecond stamp */
-	char *on;
-	tv_t r;
-
-	if (UNLIKELY(*buf++ != '.')) {
-		/* no subseconds here, mate */
-		return 0UL;
-	}
-	r = strtoul(buf, &on, 10);	
-	switch (on - buf) {
-	case 0U:
-		r *= 10U;
-	case 1U:
-		r *= 10U;
-	case 2U:
-		r *= 10U;
-	case 3U:
-		r *= 10U;
-	case 4U:
-		r *= 10U;
-	case 5U:
-		r *= 10U;
-	case 6U:
-		r *= 10U;
-	case 7U:
-		r *= 10U;
-	case 8U:
-		r *= 10U;
-	default:
-		break;
-	}
-	if (LIKELY(endptr != NULL)) {
-		*endptr = on;
-	}
-	return r;
+	return memncpy(buf, base + tok.start, tok.end - tok.start);
 }
 
 
@@ -199,7 +165,7 @@ snarf_ins(const char *val, size_t len)
 }
 
 static btsp_side_t
-snarf_side(const char *val, size_t UNUSED(len))
+UNUSED(snarf_side)(const char *val, size_t UNUSED(len))
 {
 	if (LIKELY(len == 1U)) {
 		switch (*val) {
@@ -217,8 +183,9 @@ snarf_side(const char *val, size_t UNUSED(len))
 
 /* processor */
 static hx_t hx_data, hx_chan, hx_evnt;
-static hx_t hx_crea, hx_dele, hx_modi;
-static hx_t hx_px, hx_qx;
+static hx_t UNUSED(hx_crea), UNUSED(hx_dele), UNUSED(hx_modi);
+static hx_t UNUSED(hx_px), UNUSED(hx_qx);
+static hx_t hx_bids, hx_asks;
 
 static void
 init(void)
@@ -237,6 +204,9 @@ init(void)
 	hx_live = hash("live", 4U);
 	hx_diff = hash("diff_order_book", 4U);
 	hx_ords = hash("order_book", 4U);
+
+	hx_bids = hash("bids", 4U);
+	hx_asks = hash("asks", 4U);
 
 	/* suffixes */
 	hx_btceur = hash("btceur", 6U);
@@ -258,7 +228,7 @@ procln(const char *line, size_t llen)
 {
 /* process one line */
 	const char *const eol = line + llen;
-	jsmntok_t tok[64U];
+	jsmntok_t tok[4096U];
 	jsmn_parser p;
 	ssize_t r;
 	char *on;
@@ -300,6 +270,8 @@ procln(const char *line, size_t llen)
 	if (UNLIKELY(!r || tok->type != JSMN_OBJECT)) {
 		return -1;
 	}
+	/* just to have a finaliser */
+	tok[r].start = -1ULL;
 
 	/* loop and fill beef */
 	for (size_t i = 1U; i < (size_t)r; i++) {
@@ -323,7 +295,7 @@ procln(const char *line, size_t llen)
 			size_t vz = tok[i].end - tok[i].start;
 			beef.ev = hash(vs, vz);
 		} else if (hx == hx_data && tok[++i].type == JSMN_OBJECT) {
-			beef.dend = tok[i].size;
+			beef.dend = tok[i].end;
 			beef.dbeg = i + 1U;
 			/* skip pairs */
 			for (size_t end = tok[i].end;
@@ -332,52 +304,86 @@ procln(const char *line, size_t llen)
 	}
 
 	switch (beef.ch) {
-	case CHAN_ORDS:
-		/* evaluate data cell */
-		for (size_t i = beef.dbeg, n = i + beef.dend; i < n; i++) {
-			hx_t hx;
+		size_t bid, eob;
+		size_t ask, eoa;
 
-			if (UNLIKELY(tok[i].type != JSMN_STRING)) {
-				continue;
-			}
-			hx = hash(on + tok[i].start, 4U);
+	case CHAN_BOOK:
+	case CHAN_DIFF:;
+		bid = 0U, eob = 0U;
+		ask = 0U, eoa = 0U;
+		for (size_t i = beef.dbeg; tok[i].start < beef.dend; i++) {
+			const char *vs = on + tok[i].start;
+			size_t vz = tok[i].end - tok[i].start;
+			hx_t hx = hash(vs, vz);
+
 			if (0) {
-				;
-			} else if (hx == hx_px &&
-				   tok[++i].type == JSMN_STRING) {
-				const char *vs = on + tok[i].start;
-				size_t vz = tok[i].end - tok[i].start;
-				memcpy(beef.p, vs, vz);
-			} else if (hx == hx_qx &&
-				   tok[++i].type == JSMN_STRING) {
-				const char *vs = on + tok[i].start;
-				size_t vz = tok[i].end - tok[i].start;
-				memcpy(beef.q, vs, vz);
-			} else if (hx == hx_ords &&
-				   tok[++i].type == JSMN_STRING) {
-				const char *vs = on + tok[i].start;
-				size_t vz = tok[i].end - tok[i].start;
-				beef.sd = snarf_side(vs, vz);
+			ffw:
+				for (size_t end = tok[i].end;
+				     tok[i + 1U].start < end; i++);
+			} else if (hx == hx_bids) {
+				bid = ++i;
+				eob = tok[i].end;
+				goto ffw;
+			} else if (hx == hx_asks) {
+				ask = ++i;
+				eoa = tok[i].end;
+				goto ffw;
 			}
 		}
+		/* otherwise go for printing */
+		static const char *const inss[] =
+			{"??????", "BTCUSD", "BTCEUR", "EURUSD"};
+		char buf[256U];
+		size_t len, ini;
 
-		/* check quantity */
-		if (UNLIKELY(!beef.q[0U])) {
-			break;
+		len = 0U;
+		len += tvtostr(buf + len, sizeof(buf) - len, beef.rt);
+		buf[len++] = '\t';
+		len += memncpy(buf + len, inss[beef.ins], 6U);
+		buf[len++] = '\t';
+		ini = len;
+#define assume(...)	if (UNLIKELY(!(__VA_ARGS__))) continue
+
+		/* bids first */
+		buf[len++] = 'B';
+		buf[len++] = (char)('2' - (beef.ch == CHAN_BOOK));
+		buf[len++] = '\t';
+		ini = len;
+		for (size_t i = bid + 1U; tok[i].start < eob; i++) {
+			len = ini;
+			assume(tok[i].type == JSMN_ARRAY);
+			len += tokncpy(buf + len, on, tok[++i]);
+			buf[len++] = '\t';
+			len += tokncpy(buf + len, on, tok[++i]);
+			buf[len++] = '\n';
+			fwrite(buf, 1, len, stdout);
+			len = ini;
+			buf[len - 2U] = '2';
 		}
-
-
-		if (0) {
-			;
-		} else if (beef.ev == hx_crea) {
-			fputs("CREA\n", stdout);
-		} else if (beef.ev == hx_modi) {
-			fputs("MODI\n", stdout);
-		} else if (beef.ev == hx_dele) {
-			fputs("DELE\n", stdout);
-		} else {
-			fwrite(line, 1, llen, stdout);
+		/* rewind */
+		len = ini -= 3U;
+		/* asks next */
+		buf[len++] = 'A';
+		buf[len++] = (char)('2' - (beef.ch == CHAN_BOOK));
+		buf[len++] = '\t';
+		ini = len;
+		for (size_t i = ask + 1U; tok[i].start < eoa; i++) {
+			assume(tok[i].type == JSMN_ARRAY);
+			len += tokncpy(buf + len, on, tok[++i]);
+			buf[len++] = '\t';
+			len += tokncpy(buf + len, on, tok[++i]);
+			buf[len++] = '\n';
+			fwrite(buf, 1, len, stdout);
+			len = ini;
+			buf[len - 2U] = '2';
 		}
+		break;
+	case CHAN_TRAS:
+		/* precision issues */
+		break;
+	case CHAN_ORDS:
+		/* precision issues */
+		break;
 	default:
 		break;
 	}
