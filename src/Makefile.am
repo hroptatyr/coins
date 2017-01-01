@@ -17,7 +17,7 @@ EXTRA_DIST = $(BUILT_SOURCES)
 CLEANFILES = 
 SUFFIXES =
 
-noinst_PROGRAMS += hitwss
+bin_PROGRAMS += hitwss
 hitwss_SOURCES = hitwss.c hitwss.yuck
 hitwss_SOURCES += nifty.h
 hitwss_SOURCES += version.c version.h
@@ -26,6 +26,15 @@ hitwss_CPPFLAGS += $(ev_CFLAGS)
 hitwss_LDFLAGS = $(AM_LDFLAGS)
 hitwss_LDFLAGS += $(ev_LIBS)
 BUILT_SOURCES += hitwss.yucc
+
+bin_PROGRAMS += hit2b
+hit2b_SOURCES = hit2b.c hit2b.yuck
+hit2b_SOURCES += jsmn.c jsmn.h
+hit2b_SOURCES += hash.c hash.h
+hit2b_SOURCES += version.c version.h
+hit2b_SOURCES += boobs.h
+hit2b_SOURCES += nifty.h
+BUILT_SOURCES += hit2b.yucc
 
 
 CLEANFILES += version.c
