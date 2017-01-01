@@ -1,0 +1,3 @@
+Usage: ok2b < FIX
+
+Convert fix data stream to books format.

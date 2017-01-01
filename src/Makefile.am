@@ -134,6 +134,30 @@ bitfin2b_SOURCES += boobs.h
 bitfin2b_SOURCES += nifty.h
 BUILT_SOURCES += bitfin2b.yucc
 
+bin_PROGRAMS += okfix
+okfix_SOURCES = okfix.c okfix.yuck
+okfix_SOURCES += nifty.h
+okfix_SOURCES += version.c version.h
+okfix_SOURCES += ../okcoin_cred.h
+okfix_SOURCES += fix.c fix.h
+okfix_SOURCES += tls.c tls.h
+okfix_CPPFLAGS = $(AM_CPPFLAGS)
+okfix_CPPFLAGS += $(ev_CFLAGS)
+okfix_LDFLAGS = $(AM_LDFLAGS)
+okfix_LDFLAGS += $(ev_LIBS)
+okfix_LDADD = $(LIBEV_LIBS) -lssl -lcrypto
+BUILT_SOURCES += okfix.yucc
+
+bin_PROGRAMS += ok2b
+ok2b_SOURCES = ok2b.c ok2b.yuck
+ok2b_SOURCES += nifty.h
+ok2b_SOURCES += version.c version.h
+ok2b_SOURCES += fix.c fix.h
+ok2b_CPPFLAGS = $(AM_CPPFLAGS)
+ok2b_CPPFLAGS += -DSOH='"|"'
+ok2b_LDFLAGS = $(AM_LDFLAGS)
+BUILT_SOURCES += ok2b.yucc
+
 
 CLEANFILES += version.c
 EXTRA_DIST += version.c.in
