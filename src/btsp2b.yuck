@@ -1,0 +1,5 @@
+Usage: btsp2b < BTSP_STREAMS
+
+Turn bitstamp websocket data into level-3 book stream.
+The resulting stream will be suitable for processing with the
+books tools.

@@ -3,18 +3,15 @@ include $(top_builddir)/version.mk
 
 AM_CFLAGS = $(EXTRA_CFLAGS)
 AM_CPPFLAGS = -D_POSIX_C_SOURCE=201001L -D_XOPEN_SOURCE=700 -D_BSD_SOURCE
-AM_CPPFLAGS += -D_HAVE_VERSION_H
+AM_CPPFLAGS += -DHAVE_VERSION_H
 AM_LDFLAGS = $(XCCLDFLAGS)
 
 bin_PROGRAMS =
 noinst_PROGRAMS =
-lib_LTLIBRARIES =
 noinst_LTLIBRARIES =
-pkglib_LTLIBRARIES =
-noinst_HEADERS =
 BUILT_SOURCES =
 EXTRA_DIST = $(BUILT_SOURCES)
-CLEANFILES = 
+CLEANFILES =
 SUFFIXES =
 
 bin_PROGRAMS += hitwss
@@ -79,6 +76,26 @@ plx2b_SOURCES += boobs.h
 plx2b_SOURCES += nifty.h
 BUILT_SOURCES += plx2b.yucc
 
+bin_PROGRAMS += btsp
+btsp_SOURCES = btsp.c btsp.yuck
+btsp_SOURCES += tls.c tls.h
+btsp_SOURCES += version.c version.h
+btsp_SOURCES += boobs.h
+btsp_SOURCES += nifty.h
+btsp_CPPFLAGS = $(AM_CPPFLAGS) $(LIBEV_CPPFLAGS)
+btsp_LDFLAGS = $(AM_LDFLAGS)  $(LIBEV_LDFLAGS)
+btsp_LDADD = $(LIBEV_LIBS) -lssl -lcrypto
+BUILT_SOURCES += btsp.yucc
+
+bin_PROGRAMS += btsp2b
+btsp2b_SOURCES = btsp2b.c btsp2b.yuck
+btsp2b_SOURCES += jsmn.c jsmn.h
+btsp2b_SOURCES += hash.c hash.h
+btsp2b_SOURCES += version.c version.h
+btsp2b_SOURCES += boobs.h
+btsp2b_SOURCES += nifty.h
+BUILT_SOURCES += btsp2b.yucc
+
 
 CLEANFILES += version.c
 EXTRA_DIST += version.c.in
@@ -104,3 +121,5 @@ SUFFIXES += .yucc
 ## Create assembler output (debugging purposes only)
 .c.s:
 	$(COMPILE) -S -c $(AM_CFLAGS) $<
+
+## Makefile.am ends here
