@@ -1,0 +1,5 @@
+Usage: bitfin2b < BITFIN_STREAM
+
+Turn bitfinex websocket data into level-2 book stream.
+The resulting stream will be suitable for processing with the
+books tools.
