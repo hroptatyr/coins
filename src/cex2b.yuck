@@ -1,0 +1,5 @@
+Usage: cex2b < CEXWSS_STREAM
+
+Turn cex websocket data into level-2 book stream.
+The resulting stream will be suitable for processing with the
+books tools.

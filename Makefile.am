@@ -10,6 +10,7 @@ EXTRA_DIST = $(DISTCLEANFILES) $(doc_DATA)
 DISTCLEANFILES =
 CLEANFILES =
 doc_DATA =
+BUILT_SOURCES =
 
 SUBDIRS += build-aux
 SUBDIRS += src
@@ -21,5 +22,11 @@ EXTRA_DIST += version.mk.in
 ## make sure .version is read-only in the dist
 dist-hook:
 	chmod ugo-w $(distdir)/.version
+	cp $(top_srcdir)/dummy_cred.h $(distdir)/cex_cred.h
+
+BUILT_SOURCES += cex_cred.h
+EXTRA_DIST += dummy_cred.h
+cex_cred.h: dummy_cred.h
+	cp $< $@
 
 ## Makefile.am ends here

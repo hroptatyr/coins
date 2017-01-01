@@ -27,3 +27,4 @@ stamp-h1
 .libs
 test-driver
 compile
+*_cred.h
