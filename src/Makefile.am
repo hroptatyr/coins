@@ -158,6 +158,19 @@ ok2b_CPPFLAGS += -DSOH='"|"'
 ok2b_LDFLAGS = $(AM_LDFLAGS)
 BUILT_SOURCES += ok2b.yucc
 
+bin_PROGRAMS += btcc
+btcc_SOURCES = btcc.c btcc.yuck
+btcc_SOURCES += nifty.h
+btcc_SOURCES += version.c version.h
+btcc_SOURCES += fix.c fix.h
+btcc_SOURCES += tls.c tls.h
+btcc_CPPFLAGS = $(AM_CPPFLAGS)
+btcc_CPPFLAGS += $(ev_CFLAGS)
+btcc_LDFLAGS = $(AM_LDFLAGS)
+btcc_LDFLAGS += $(ev_LIBS)
+btcc_LDADD = $(LIBEV_LIBS) -lssl -lcrypto
+BUILT_SOURCES += btcc.yucc
+
 
 CLEANFILES += version.c
 EXTRA_DIST += version.c.in

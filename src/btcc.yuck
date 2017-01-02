@@ -1,0 +1,4 @@
+Usage: btcc INSTR
+
+Subscribe to BTCC data feeds.
+INSTR must be one of BTCCNY, LTCCNY, LTCBTC, or XBTCNY.
