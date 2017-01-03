@@ -181,6 +181,17 @@ btcc2b_CPPFLAGS += -DSOH='"|"'
 btcc2b_LDFLAGS = $(AM_LDFLAGS)
 BUILT_SOURCES += btcc2b.yucc
 
+bin_PROGRAMS += trtwss
+trtwss_SOURCES = trtwss.c trtwss.yuck
+trtwss_SOURCES += tls.c tls.h
+trtwss_SOURCES += version.c version.h
+trtwss_SOURCES += boobs.h
+trtwss_SOURCES += nifty.h
+trtwss_CPPFLAGS = $(AM_CPPFLAGS) $(LIBEV_CPPFLAGS)
+trtwss_LDFLAGS = $(AM_LDFLAGS)  $(LIBEV_LDFLAGS)
+trtwss_LDADD = $(LIBEV_LIBS) -lssl -lcrypto
+BUILT_SOURCES += trtwss.yucc
+
 
 CLEANFILES += version.c
 EXTRA_DIST += version.c.in
