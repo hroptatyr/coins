@@ -160,8 +160,10 @@ fix_parse(char *restrict buf, size_t bsz)
 		goto buggered;
 	}
 	/* look for that 35 tag (msg type),
-	 * we only scan messages whose lengths are 3 digits max */
+	 * we only scan messages whose lengths are 5 digits max */
 	if (j = sizeof(fhdr),
+	    buf[j++] != *SOH &&
+	    buf[j++] != *SOH &&
 	    buf[j++] != *SOH &&
 	    buf[j++] != *SOH &&
 	    buf[j++] != *SOH) {

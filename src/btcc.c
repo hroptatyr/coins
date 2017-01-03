@@ -15,28 +15,57 @@
 #include <time.h>
 #include <ev.h>
 #include <assert.h>
-#include "../okcoin_cred.h"
 #include "nifty.h"
 #include "fix.h"
 #include "tls.h"
 
-#define API_HOST	"api.okcoin.com"
 #define API_PORT	9880
-
-#define TCOMP_ID	"OKSERVER"
-#define SCOMP_ID	"okclient"
-#define SCOMP_US	API_KEY
-#define SCOMP_PW	API_SEC
 
 #define ONE_DAY		86400.0
 #define MIDNIGHT	0.0
 
 typedef enum {
-	OKUM_STATE_UNK,
-	OKUM_STATE_ON,
-	OKUM_STATE_SUB,
-	OKUM_STATE_OFF,
-} okum_state_t;
+	BTCC_STATE_UNK,
+	BTCC_STATE_ON,
+	BTCC_STATE_SUB,
+	BTCC_STATE_OFF,
+} btcc_state_t;
+
+typedef enum {
+	SPOT,
+	PRO,
+	SPOT_USD,
+} btcc_srv_t;
+
+typedef enum {
+	BTCCNY,
+	LTCCNY,
+	LTCBTC,
+	XBTCNY,
+	BPICNY,
+	BTCUSD,
+} btcc_ins_t;
+
+static const btcc_srv_t srvs[] = {
+	[BTCCNY] = SPOT,
+	[LTCCNY] = SPOT,
+	[LTCBTC] = SPOT,
+	[XBTCNY] = PRO,
+	[BPICNY] = PRO,
+	[BTCUSD] = SPOT_USD,
+};
+
+static const char *const tcomps[] = {
+	[SPOT] = "BTCC-FIX-SERVER",
+	[PRO] = "BTCC-PRO-EXCHANGE-SERVER",
+	[SPOT_USD] = "BTCC",
+};
+
+static const char *const hosts[] = {
+	[SPOT] = "fix.btcc.com",
+	[PRO] = "pro-fix.btcc.com",
+	[SPOT_USD] = "spotusd-fix.btcc.com",
+};
 
 
 static __attribute__((format(printf, 1, 2))) void
@@ -121,11 +150,11 @@ hrclock_print(char *buf, size_t __attribute__((unused)) len)
 }
 
 
-static const char logfile[] = "prices";
-static okum_state_t st;
+static btcc_ins_t ins;
+static btcc_srv_t srv;
+static char logfile[] = "xxxxxx";
+static btcc_state_t st;
 static ssl_ctx_t sc;
-static size_t ninstr;
-static char *const *instr;
 static unsigned int susp;
 static char hostname[256];
 static size_t hostnsz;
@@ -202,8 +231,7 @@ rotate_outfile(void)
 static int
 fix_hello(void)
 {
-	static const char helo[] = "98=0" SOH "108=30" SOH "141=Y" SOH
-		"553=" SCOMP_US SOH "554=" SCOMP_PW SOH;
+	static const char helo[] = "98=0" SOH "108=30" SOH "141=Y" SOH;
 	char buf[1536U];
 	size_t len;
 	ssize_t nwr;
@@ -242,44 +270,22 @@ Error: ssl write %d", tls_errno(sc, nwr));
 }
 
 static int
-fix_subsc(const char *sym)
+fix_subsc(void)
 {
-#define MREQ	"262=mreq" SOH "263=1" SOH		\
-		"264=0" SOH "265=1" SOH			\
-		"267=2" SOH "269=0" SOH "269=1" SOH	\
-		"146=1" SOH "55=BTC/USD" SOH
-#define TREQ	"262=treq" SOH "263=1" SOH		\
-		"264=0" SOH "265=1" SOH			\
-		"267=1"	SOH "269=2" SOH "146=1" SOH	\
-		"55=BTC/USD" SOH
-	static char mreq[256U] = MREQ;
-	static char treq[256U] = TREQ;
-	char buf[1536U];
+	static char mreq[] =
+		"262=mreq" SOH "263=1" SOH		\
+		"264=100" SOH "265=1" SOH "267=3" SOH	\
+		"269=0" SOH "269=1" SOH "269=2" SOH	\
+		"146=1" SOH "55=XBTCNY" SOH;
+	char buf[256U];
 	size_t len;
 	int nwr;
-	const size_t ssz = strlen(sym);
 
-	/* request quotes first */
-	memcpy(mreq + strlenof(MREQ) - 8U, sym, ssz);
-	len = strlenof(MREQ) - 8U + ssz;
-	mreq[len++] = *SOH;
+	/* make use of the fact that logfile is named after INS */
+	memcpy(mreq + strlenof(mreq) - 7U, logfile, strlenof(logfile));
 
-	len = fix_render(buf, sizeof(buf), (fix_msg_t){"V", len, mreq});
-
-	if (UNLIKELY(sc == NULL)) {
-		;
-	} else if (UNLIKELY((nwr = tls_send(sc, buf, len, 0)) <= 0)) {
-		errno = 0, serror("\
-Error: ssl write %d", tls_errno(sc, nwr));
-	}
-	buf_print(buf, len);
-
-	/* and again for trades */
-	memcpy(treq + strlenof(TREQ) - 8U, sym, ssz);
-	len = strlenof(TREQ) - 8U + ssz;
-	treq[len++] = *SOH;
-
-	len = fix_render(buf, sizeof(buf), (fix_msg_t){"V", len, treq});
+	len = fix_render(buf, sizeof(buf),
+			 (fix_msg_t){"V", strlenof(mreq), mreq});
 
 	if (UNLIKELY(sc == NULL)) {
 		;
@@ -360,7 +366,7 @@ Error: ssl error %d", e);
 	case UINTIFY_TYP("W"):
 	case UINTIFY_TYP("X"):
 		switch (st) {
-		case OKUM_STATE_SUB:
+		case BTCC_STATE_SUB:
 			break;
 		default:
 			errno = 0, serror("\
@@ -371,24 +377,22 @@ Warning: quote message received while nothing's been subscribed");
 
 	case UINTIFY_TYP("A"):
 		switch (st) {
-		case OKUM_STATE_ON:
-		case OKUM_STATE_SUB:
+		case BTCC_STATE_ON:
+		case BTCC_STATE_SUB:
 			errno = 0, serror("\
 Warning: logon message received while logged on already");
 		default:
 			break;
 		}
 		/* logon */
-		st = OKUM_STATE_ON;
+		st = BTCC_STATE_ON;
 		/* subscribe to everyone */
-		for (size_t i = 0U; i < ninstr; i++) {
-			fix_subsc(instr[i]);
-			st = OKUM_STATE_SUB;
-		}
+		fix_subsc();
+		st = BTCC_STATE_SUB;
 		break;
 	case UINTIFY_TYP("5"):
 		/* logout, set state accordingly */
-		st = OKUM_STATE_OFF;
+		st = BTCC_STATE_OFF;
 		errno = 0, serror("\
 Notice: clocking off");
 		susp = 0U;
@@ -398,6 +402,10 @@ Notice: clocking off");
 Notice: sleeping till full hour");
 			susp = 60U;
 		}
+		break;
+
+	case UINTIFY_TYP("0"):
+		/* heartbeat, mute him */
 		break;
 
 	case 0U:
@@ -414,7 +422,7 @@ Warning: unsupported message %s", msg.typ);
 	return;
 
 unroll:
-	st = OKUM_STATE_UNK;
+	st = BTCC_STATE_UNK;
 	ev_unloop(EV_A_ EVUNLOOP_ALL);
 	return;
 }
@@ -424,7 +432,7 @@ sigint_cb(EV_P_ ev_signal *UNUSED(w), int UNUSED(revents))
 {
 	fix_gdbye();
 	ev_unloop(EV_A_ EVUNLOOP_ALL);
-	st = OKUM_STATE_UNK;
+	st = BTCC_STATE_UNK;
 	return;
 }
 
@@ -445,27 +453,54 @@ midnight_cb(EV_P_ ev_periodic *UNUSED(w), int UNUSED(r))
 }
 
 
-#include "okfix.yucc"
+#include "btcc.yucc"
 
 int
 main(int argc, char *argv[])
 {
 	static yuck_t argi[1U];
+	static char scomp[] = "coins_btcc_xxxxxx";
 	EV_P = ev_default_loop(EVFLAG_AUTO);
 	ev_signal sigint_watcher[1U];
 	ev_signal sigterm_watcher[1U];
 	ev_periodic midnight[1];
 	ev_timer hbeat[1U];
 	ev_io beef[1U];
-	int rc = 0;
+	int rc = EXIT_SUCCESS;
 
 	if (yuck_parse(argi, argc, argv) < 0) {
-		rc = 1;
+		rc = EXIT_FAILURE;
 		goto out;
 	}
 
-	ninstr = argi->nargs;
-	instr = argi->args;
+	/* try and get the instrument in question */
+	if (!argi->nargs) {
+		errno = 0, serror("\
+Error: no instrument specified, must be one of BTCCNY, LTCCNY, LTCBTC, XBTCNY");
+		rc = EXIT_FAILURE;
+		goto out;
+	} else if (!memcmp(*argi->args, "BTCCNY", 6U)) {
+		ins = BTCCNY;
+	} else if (!memcmp(*argi->args, "LTCCNY", 6U)) {
+		ins = LTCCNY;
+	} else if (!memcmp(*argi->args, "LTCBTC", 6U)) {
+		ins = LTCBTC;
+	} else if (!memcmp(*argi->args, "XBTCNY", 6U)) {
+		ins = XBTCNY;
+	} else if (!memcmp(*argi->args, "BPICNY", 6U)) {
+		ins = BPICNY;
+	} else if (!memcmp(*argi->args, "BTCUSD", 6U)) {
+		ins = BTCUSD;
+	} else {
+		errno = 0, serror("\
+Error: unknown instrument `%s'", *argi->args);
+		rc = EXIT_FAILURE;
+		goto out;
+	}
+	/* name the logfile after the instrument */
+	memcpy(logfile, *argi->args, strlenof(logfile));
+	/* determine server */
+	srv = srvs[ins];
 
 	/* put the hostname behind logfile */
 	(void)gethostname(hostname, sizeof(hostname));
@@ -485,14 +520,15 @@ main(int argc, char *argv[])
 	ev_periodic_start(EV_A_ midnight);
 
 	/* make ourselves known */
-	fix_set_scomp_id(SCOMP_ID, strlenof(SCOMP_ID));
-	fix_set_tcomp_id(TCOMP_ID, strlenof(TCOMP_ID));
+	memcpy(scomp + strlenof(scomp) - 6U, *argi->args, 6U);
+	fix_set_scomp_id(scomp, strlenof(scomp));
+	fix_set_tcomp_id(tcomps[srv], strlen(tcomps[srv]));
 
 	/* open our outfile */
 	open_outfile();
 
 	do {
-		if ((sc = open_tls(API_HOST, API_PORT)) == NULL) {
+		if ((sc = open_tls(hosts[srv], API_PORT)) == NULL) {
 			serror("\
 Error: cannot connect");
 			rc = 1;
@@ -530,4 +566,4 @@ out:
 	return rc;
 }
 
-/* okfix.c ends here */
+/* btcc.c ends here */
