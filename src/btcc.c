@@ -141,6 +141,14 @@ xmemmem(const char *hay, const size_t hayz, const char *ndl, const size_t ndlz)
 	return NULL;
 }
 
+static inline size_t
+hrclock_print(char *buf, size_t __attribute__((unused)) len)
+{
+	struct timespec tsp[1];
+	clock_gettime(CLOCK_REALTIME_COARSE, tsp);
+	return sprintf(buf, "%ld.%09li", tsp->tv_sec, tsp->tv_nsec);
+}
+
 
 static btcc_ins_t ins;
 static btcc_srv_t srv;
@@ -156,16 +164,22 @@ static void
 buf_print(const char *buf, ssize_t bsz)
 {
 	char out[16384U];
+	size_t sz;
 
 	if (UNLIKELY(bsz < 0)) {
 		return;
 	}
-	for (ssize_t i = 0; i < bsz; i++) {
-		out[i] = (char)(buf[i] != *SOH ? buf[i] : '|');
+	/* this is a prefix that we prepend to each line */
+	sz = hrclock_print(out, sizeof(out));
+	out[sz++] = '\t';
+
+	for (ssize_t i = 0; i < bsz; i++, sz++) {
+		out[sz] = (char)(buf[i] != *SOH ? buf[i] : '|');
 	}
-	out[bsz++] = '\n';
-	write(logfd, out, bsz);
-	write(STDOUT_FILENO, out, bsz);
+	out[sz++] = '\n';
+
+	write(logfd, out, sz);
+	write(STDOUT_FILENO, out, sz);
 	return;
 }
 
