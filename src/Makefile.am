@@ -171,6 +171,16 @@ btcc_LDFLAGS += $(ev_LIBS)
 btcc_LDADD = $(LIBEV_LIBS) -lssl -lcrypto
 BUILT_SOURCES += btcc.yucc
 
+bin_PROGRAMS += btcc2b
+btcc2b_SOURCES = btcc2b.c btcc2b.yuck
+btcc2b_SOURCES += nifty.h
+btcc2b_SOURCES += version.c version.h
+btcc2b_SOURCES += fix.c fix.h
+btcc2b_CPPFLAGS = $(AM_CPPFLAGS)
+btcc2b_CPPFLAGS += -DSOH='"|"'
+btcc2b_LDFLAGS = $(AM_LDFLAGS)
+BUILT_SOURCES += btcc2b.yucc
+
 
 CLEANFILES += version.c
 EXTRA_DIST += version.c.in
