@@ -112,7 +112,7 @@ strtons(const char *buf, char **endptr)
 		/* no subseconds here, mate */
 		return 0UL;
 	}
-	r = strtoul(buf, &on, 10);	
+	r = strtoul(buf, &on, 10);
 	switch (on - buf) {
 	case 0U:
 		r *= 10U;
@@ -143,7 +143,7 @@ strtons(const char *buf, char **endptr)
 
 
 static int
-route_quote(fix_msg_t msg)
+route_quote(fix_msg_t msg, const char *prfx, size_t prfz)
 {
 /* extract bid, ask and instrument and send to mcast channel */
 	static const char tim[] = NUL "52=";
@@ -171,10 +171,16 @@ route_quote(fix_msg_t msg)
 		t += strtons(on, NULL);
 		len += tvtostr(buf + len, sizeof(buf), t);
 	}
+	buf[len++] = '\t';
+
+	/* put the prefix in */
+	if (LIKELY(prfz)) {
+		len += memncpy(buf + len, prfx, prfz);
+	}
+
 	if (UNLIKELY(!(on = xmemmem(msg.msg, msg.len, ins, strlenof(ins))))) {
 		return -1;
 	}
-	buf[len++] = '\t';
 	len += memncpy(buf + len, on, strlen(on));
 	if ((on = xmemmem(msg.msg, msg.len, ccy, strlenof(ccy)))) {
 		/* they encode the contract in field 15 */
@@ -224,12 +230,18 @@ route_quote(fix_msg_t msg)
 static int
 procln(char *ln, size_t lz)
 {
-	fix_msg_t msg = fix_parse(ln, lz);
+	fix_msg_t msg;
+	size_t prfz;
+
+	with (const char *prfx = memchr(ln, '\t', lz)) {
+		prfz = prfx ? prfx + 1U - ln : 0U;
+	}
+	msg = fix_parse(ln + prfz, lz - prfz);
 
 	switch (UINTIFY_TYP(msg.typ)) {
 	case UINTIFY_TYP("W"):	/* full refresh */
 	case UINTIFY_TYP("X"):	/* inc refresh */
-		route_quote(msg);
+		route_quote(msg, ln, prfz);
 		break;
 
 	case UINTIFY_TYP("A"):
