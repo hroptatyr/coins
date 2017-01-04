@@ -17,8 +17,6 @@
 #include <errno.h>
 #undef EV_COMPAT3
 #include <ev.h>
-#include "boobs.h"
-#include "tls.h"
 #include "ws.h"
 #include "nifty.h"
 
@@ -26,6 +24,7 @@ static const char logfile[] = "prices";
 static char hostname[256];
 static size_t hostnsz;
 
+#define API_URL		"wss://www.bitmex.com/realtime"
 #define API_HOST	"www.bitmex.com"
 #define API_PORT	443
 
@@ -78,8 +77,8 @@ struct coin_ctx_s {
 
 	/* keep track of heart beats */
 	int nothing;
-	/* ssl context */
-	ssl_ctx_t ss;
+	/* web socket context */
+	ws_t ws;
 	/* internal state */
 	coin_st_t st;
 
@@ -90,10 +89,11 @@ struct coin_ctx_s {
 	struct timespec last_act[1];
 };
 
-static char gbuf[1048576];
-static volatile size_t boff = 0;
+/* always have room for the timestamp */
+#define INI_GBOF	21U
+static char gbuf[1048576U];
+static size_t gbof = INI_GBOF;
 static int logfd;
-static int ping;
 
 
 #define countof(x)	(sizeof(x) / sizeof(*x))
@@ -126,7 +126,7 @@ fputsl(FILE *fp, const char *s, size_t l)
 static struct timespec tsp[1];
 
 static inline size_t
-hrclock_print(char *buf, size_t __attribute__((unused)) len)
+hrclock_print(char *buf, size_t UNUSED(len))
 {
 	clock_gettime(CLOCK_REALTIME_COARSE, tsp);
 	return sprintf(buf, "%ld.%09li", tsp->tv_sec, tsp->tv_nsec);
@@ -152,8 +152,6 @@ close_sock(int fd)
 }
 
 
-static char line[16U * 65536U];
-
 static inline size_t
 memncpy(char *restrict tgt, const char *src, size_t zrc)
 {
@@ -161,171 +159,53 @@ memncpy(char *restrict tgt, const char *src, size_t zrc)
 	return zrc;
 }
 
-static ssize_t
-toout_logline(const char *buf, size_t len)
+static inline size_t
+memnmove(void *dest, const void *src, size_t n)
 {
-	const char *lp = buf;
-	const char *const ep = buf + len;
-	size_t sz, cz;
+	if (LIKELY(n && dest != src)) {
+		memmove(dest, src, n);
+	}
+	return n;
+}
+
+static int
+loghim(const char *buf, size_t len)
+{
+	size_t prfz;
 
 	/* this is a prefix that we prepend to each line */
-	sz = hrclock_print(line, sizeof(line));
-	line[sz++] = '\t';
-	cz = sz;
+	prfz = hrclock_print(gbuf, INI_GBOF);
+	gbuf[prfz++] = '\t';
 
-	for (const char *eol;
-	     lp < ep && (eol = memchr(lp, '\n', ep - lp)); lp = eol + 1U) {
-		sz += memncpy(line + sz, line, cz);
-		sz += memncpy(line + sz, lp, eol + 1U - lp);
-	}
-	if (sz == cz) {
-		sz += memncpy(line + sz, buf, len);
-		line[sz++] = '\n';
-		/* use the prefix directly */
-		cz = 0U;
-	}
-
-	/* write to stdout and to logfile */
-	write(logfd, line + cz, sz - cz);
-	fwrite(line + cz, 1, sz - cz, stderr);
-	return sz - cz;
+	memnmove(gbuf + prfz, buf, len);
+	gbuf[prfz + len++] = '\n';
+	write(logfd, gbuf, prfz + len);
+	fwrite(gbuf, 1, prfz + len, stderr);
+	return 0;
 }
 
 static ssize_t
-toout_logline2(const char *pb, size_t pbz, const char *buf, size_t len)
+logwss(const char *buf, size_t len)
 {
 	const char *lp = buf;
-	const char *const ep = buf + len;
-	const char *eol;
-	size_t sz, cz;
+	size_t prfz;
 
-	/* again, a prefix that we're about to prepend */
-	sz = hrclock_print(line, sizeof(line));
-	line[sz++] = '\t';
-	cz = sz;
+	/* this is a prefix that we prepend to each line */
+	prfz = hrclock_print(gbuf, INI_GBOF);
+	gbuf[prfz++] = '\t';
 
-	/* copy left-overs from last time */
-	sz += memncpy(line + sz, pb, pbz);
-
-	for (; lp < ep && (eol = memchr(lp, '\n', ep - lp)); lp = eol + 1U) {
-		sz += memncpy(line + sz, line, cz);
-		sz += memncpy(line + sz, lp, eol + 1U - lp);
+	for (const char *eol, *const ep = buf + len;
+	     lp < ep && (eol = memchr(lp, '\n', ep - lp));
+	     lp = eol + 1U) {
+		memmove(gbuf + prfz, lp, eol - lp);
+		gbuf[prfz + (eol - lp)] = '\n';
+		write(logfd, gbuf, prfz + (eol - lp) + 1U);
+		fwrite(gbuf, 1, prfz + (eol - lp) + 1U, stderr);
 	}
-
-	/* write to stdout and to logfile */
-	write(logfd, line + cz, sz - cz);
-	fwrite(line + cz, 1, sz - cz, stderr);
-	return sz - cz;
+	return lp - buf;
 }
 
 
-static ssize_t
-proc_beef(const char *buf, size_t len)
-{
-/* assume there WS frame(s) and little-endian here */
-	wsfr_t fr[1U];
-	size_t npr;
-
-	for (npr = 0U; npr < len;) {
-		const char *bp;
-		size_t bz;
-
-		memcpy(fr, buf + npr, sizeof(*fr));
-		switch (fr->plen) {
-		case 126U:
-			bp = buf + npr + offsetof(wsfr_t, plen16_1);
-			bz = be16toh(fr->plen16);
-			break;
-		case 127U:
-			bp = buf + npr + offsetof(wsfr_t, mkey);
-			bz = 0U;
-			bz ^= be16toh(fr->plen16);
-			bz <<= 16U;
-			bz ^= be16toh(fr->plen16_1);
-			bz <<= 16U;
-			bz ^= be16toh(fr->plen16_2);
-			bz <<= 16U;
-			bz ^= be16toh(fr->plen16_3);
-			break;
-		default:
-			bp = buf + npr + offsetof(wsfr_t, plen16);
-			bz = fr->plen;
-			break;
-		}
-
-		if (fr->mask) {
-			fputs("MASK\n", stderr);
-			bz += sizeof(fr->mkey);
-		}
-
-		if ((bp - buf) + bz > len) {
-			fprintf(stderr, "CONT?  need %zu  plen %d\n", bz, fr->plen);
-			break;
-		}
-
-		switch (fr->code) {
-			static char lefto[4096U];
-			static size_t nlefto;
-			ssize_t nwr;
-
-		case 0x0U:
-			/* frame continuation */
-			if (nlefto) {
-				toout_logline("CONT!", 5U);
-				nwr = toout_logline2(lefto, nlefto, bp, bz);
-				if ((size_t)nwr < bz) {
-					/* stash the rest for CONT */
-					nlefto = bz + nlefto - nwr;
-					memcpy(lefto, bp + nwr, nlefto);
-				}
-				break;
-			}
-		case 0x1U:
-			/* text message */
-			nlefto = 0U;
-			nwr = toout_logline(bp, bz);
-			if ((size_t)nwr < bz) {
-				/* stash the rest for CONT */
-				nlefto = bz - nwr;
-				memcpy(lefto, bp + nwr, nlefto);
-			}
-			break;
-		case 0x2U:
-			/* binary frame */
-			toout_logline("BDATA", 5U);
-			/* pretend we proc'd it */
-			break;
-		case 0x9U:
-			/* ping */
-			toout_logline("PING?", 5U);
-			ping++;
-			break;
-		case 0xaU:
-			/* pong */
-			toout_logline("PONG?", 5U);
-			break;
-		default:
-		case 0x8U:
-			/* conn close :O */
-			toout_logline("CLOS?", 5U);
-			return -1;
-		}
-		/* calc new npr offset */
-		npr = bp - buf + bz;
-	}
-	return npr;
-}
-
-static void
-reply_heartbeat(ssl_ctx_t ss)
-{
-	static const char pong[] = {0x8a, 0x00};
-
-	tls_send(ss, pong, sizeof(pong), 0);
-	toout_logline("PONG!", 5U);
-	return;
-}
-
 typedef struct coin_data_s {
 	struct tm tm[1];
 	char *bid;
@@ -370,7 +250,7 @@ rotate_outfile(void)
 	fprintf(stderr, "new \"%s\"\n", new);
 
 	/* close the old file */
-	toout_logline(msg, sizeof(msg) - 1);
+	loghim(msg, sizeof(msg) - 1);
 	close_sock(logfd);
 	/* rename it and reopen under the old name */
 	rename(logfile, new);
@@ -384,61 +264,46 @@ ws_cb(EV_P_ ev_io *w, int UNUSED(revents))
 {
 /* we know that w is part of the coin_ctx_s structure */
 	coin_ctx_t ctx = w->data;
-	size_t maxr = sizeof(gbuf) - boff;
+	size_t maxr = sizeof(gbuf) - gbof;
 	ssize_t nrd;
 
-	if ((nrd = tls_recv(ctx->ss, gbuf + boff, maxr, 0)) <= 0) {
+	if ((nrd = ws_recv(ctx->ws, gbuf + gbof, maxr, 0)) <= 0) {
 		/* connexion reset or something? */
 		serror("recv(%d) failed", w->fd);
 		goto unroll;
 	}
-	/* terminate with \nul and check */
-	gbuf[boff + nrd] = '\0';
 
 #if 1
 /* debugging */
-	fprintf(stderr, "WS (%u) read %zu+%zi/%zu bytes\n", ctx->st, boff, nrd, maxr);
-	//fwrite(gbuf, 1, boff + nrd, stderr);
+	fprintf(stderr, "WS (%u) read %zu+%zi/%zu bytes\n", ctx->st, gbof, nrd, maxr);
 #endif	/* 1 */
 
 	switch (ctx->st) {
+		ssize_t npr;
+
 	case COIN_ST_CONN:
+		ctx->st = COIN_ST_CONND;
 	case COIN_ST_CONND:
-		if (nrd < 12) {
-			;
-		} else if (!memcmp(gbuf, "HTTP/1.1 101", 12U)) {
-			ctx->st = COIN_ST_CONND;
-			fwrite(gbuf, 1, nrd, stderr);
-			fputs("CONND\n", stderr);
-		}
-		boff = 0;
+		fputs("CONND\n", stderr);
+		gbof = INI_GBOF;
 		break;
 
 	case COIN_ST_JOIN:
 		/* assume that we've successfully joined */
 		ctx->st = COIN_ST_JOIND;
-	case COIN_ST_JOIND:;
-		ssize_t npr;
+	case COIN_ST_JOIND:
+		gbof += nrd;
+		/* log him */
+		npr = logwss(gbuf + INI_GBOF, gbof - INI_GBOF);
+		memnmove(gbuf + INI_GBOF, gbuf + INI_GBOF + npr, gbof - npr);
+		gbof -= npr;
 
-		if ((npr = proc_beef(gbuf, boff + nrd)) < 0) {
-			goto unroll;
-		}
-		if (ping > 0) {
-			reply_heartbeat(ctx->ss);
-			ping--;
-		} else {
-			ping = 0;
-		}
 		/* keep a reference of our time stamp */
 		*ctx->last_act = *tsp;
-		/* move things around */
-		if (npr < (ssize_t)(boff + nrd)) {
-			/* havent'f finished processing a line */
-			memmove(gbuf, gbuf + npr, boff = (boff + nrd - npr));
-			break;
-		}
+		break;
+
 	default:
-		boff = 0;
+		gbof = INI_GBOF;
 		break;
 	}
 
@@ -448,25 +313,25 @@ ws_cb(EV_P_ ev_io *w, int UNUSED(revents))
 
 unroll:
 	/* connection reset */
-	toout_logline("restart in 9", 12);
+	loghim("restart in 9", 12);
 	sleep(1);
-	toout_logline("restart in 8", 12);
+	loghim("restart in 8", 12);
 	sleep(1);
-	toout_logline("restart in 7", 12);
+	loghim("restart in 7", 12);
 	sleep(1);
-	toout_logline("restart in 6", 12);
+	loghim("restart in 6", 12);
 	sleep(1);
-	toout_logline("restart in 5", 12);
+	loghim("restart in 5", 12);
 	sleep(1);
-	toout_logline("restart in 4", 12);
+	loghim("restart in 4", 12);
 	sleep(1);
-	toout_logline("restart in 3", 12);
+	loghim("restart in 3", 12);
 	sleep(1);
-	toout_logline("restart in 2", 12);
+	loghim("restart in 2", 12);
 	sleep(1);
-	toout_logline("restart in 1", 12);
+	loghim("restart in 1", 12);
 	sleep(1);
-	toout_logline("restart", 7);
+	loghim("restart", 7);
 	ctx->nothing = 0;
 	ctx->st = COIN_ST_RECONN;
 	return;
@@ -493,18 +358,18 @@ silence_cb(EV_PU_ ev_timer *w, int UNUSED(revents))
 {
 	coin_ctx_t ctx = w->data;
 
-	toout_logline("nothing", 7);
+	loghim("nothing", 7);
 	if (ctx->nothing++ >= NTIMEOUTS) {
 		switch (ctx->st) {
 		case COIN_ST_SLEEP:
 			ctx->nothing = 0;
-			toout_logline("wakey wakey", 11);
+			loghim("wakey wakey", 11);
 			ctx->st = COIN_ST_RECONN;
 			break;
 		default:
 			/* only fall asleep when subscribed */
 			ctx->nothing = 0;
-			toout_logline("suspend", 7);
+			loghim("suspend", 7);
 			ctx->st = COIN_ST_NODATA;
 			break;
 		}
@@ -517,80 +382,13 @@ sigint_cb(EV_PU_ ev_signal *w, int UNUSED(revents))
 {
 	coin_ctx_t ctx = w->data;
 	/* quit the whole shebang */
-	toout_logline("C-c", 3);
+	loghim("C-c", 3);
 	ctx->nothing = 0;
 	ctx->st = COIN_ST_INTR;
 	return;
 }
 
 
-static ssize_t
-ws_send(ssl_ctx_t ss, const char *chan, size_t clen)
-{
-	size_t loff = 0U;
-	wsfr_t fr = {
-		.code = 0x1U,
-		.rsv3 = 0U,
-		.rsv2 = 0U,
-		.rsv1 = 0U,
-		.finp = 1U,
-		.mask = 1U,
-		.plen = 0U,
-	};
-	size_t slen;
-
-	if (clen >= 65536U) {
-		uint64_t blen = htobe64(clen);
-		fr.plen = 127U;
-		fr.plen16 = (blen >> 48) & 0xffffU;
-		fr.plen16_1 = (blen >> 32) & 0xffffU;
-		fr.plen16_2 = (blen >> 16) & 0xffffU;
-		fr.plen16_3 = (blen >> 0) & 0xffffU;
-		slen = sizeof(wsfr_t);
-	} else if (clen >= 126U) {
-		fr.plen = 126U;
-		fr.plen16 = htobe16(clen);
-		slen = offsetof(wsfr_t, plen16_1) + sizeof(fr.mkey);
-	} else {
-		fr.plen = clen;
-		slen = offsetof(wsfr_t, plen16) + sizeof(fr.mkey);
-	}
-
-	memcpy(line + loff, &fr, slen);
-	loff += slen;
-	memcpy(line + loff, chan, clen);
-	loff += clen;
-	line[loff] = '\0';
-
-	fwrite(chan, 1, clen, stderr);
-	return tls_send(ss, line, loff, 0);
-}
-
-static void
-requst_coin(EV_P_ coin_ctx_t ctx)
-{
-	static const char greq[] = "\
-GET /realtime HTTP/1.1\r\n\
-Host: " API_HOST "\r\n\
-Pragma: no-cache\r\n\
-Origin: http://coinmatch.com\r\n\
-Sec-WebSocket-Version: 13\r\n\
-Sec-WebSocket-Key: e8w+o5wQsV0rXFezPUS8XQ==\r\n\
-User-Agent: Mozilla/5.0\r\n\
-Upgrade: websocket\r\n\
-Cache-Control: no-cache\r\n\
-Connection: Upgrade\r\n\
-\r\n";
-
-	(void)EV_A;
-	fputs("GETting\n", stderr);
-	if (tls_send(ctx->ss, greq, sizeof(greq) - 1U, 0) < 0) {
-		ctx->st = COIN_ST_UNK;
-		return;
-	}
-	return;
-}
-
 static void
 subscr_coin(EV_P_ coin_ctx_t ctx)
 {
@@ -605,7 +403,9 @@ subscr_coin(EV_P_ coin_ctx_t ctx)
 		sub[z++] = ']';
 		sub[z++] = '}';
 
-		ws_send(ctx->ss, sub, z);
+		ws_send(ctx->ws, sub, z, 0);
+		fwrite(sub, 1, z, stderr);
+		fputc('\n', stderr);
 	}
 	for (size_t i = 0U; i < ctx->nsubs; i++) {
 		const char *ins = ctx->subs[i];
@@ -621,13 +421,15 @@ subscr_coin(EV_P_ coin_ctx_t ctx)
 		sub[z++] = ']';
 		sub[z++] = '}';
 
-		ws_send(ctx->ss, sub, z);
+		ws_send(ctx->ws, sub, z, 0);
+		fwrite(sub, 1, z, stderr);
+		fputc('\n', stderr);
 	}
 
 	/* reset nothing counter and start the nothing timer */
 	ctx->nothing = 0;
 	ev_timer_again(EV_A_ ctx->timer);
-	boff = 0;
+	gbof = INI_GBOF;
 
 	ctx->st = COIN_ST_JOIN;
 	/* initialise our last activity stamp */
@@ -640,11 +442,11 @@ init_coin(EV_P_ coin_ctx_t ctx)
 {
 /* this init process is two part: request a token, then do the subscriptions */
 	ctx->st = COIN_ST_UNK;
-	boff = 0U;
+	gbof = INI_GBOF;
 
 	fprintf(stderr, "INIT\n");
 	ev_timer_again(EV_A_ ctx->timer);
-	if ((ctx->ss = open_tls(API_HOST, API_PORT)) == NULL) {
+	if ((ctx->ws = ws_open(API_URL)) == NULL) {
 			serror("\
 Error: cannot connect");
 		/* retry soon, we just use the watcher for this */
@@ -652,13 +454,10 @@ Error: cannot connect");
 		return;
 	}
 
-	ev_io_init(ctx->watcher, ws_cb, tls_fd(ctx->ss), EV_READ);
+	ev_io_init(ctx->watcher, ws_cb, ws_fd(ctx->ws), EV_READ);
 	ev_io_start(EV_A_ ctx->watcher);
 	ctx->watcher->data = ctx;
 	ctx->st = COIN_ST_CONN;
-
-	/* send our friendly demand */
-	requst_coin(EV_A_ ctx);
 	return;
 }
 
@@ -670,14 +469,14 @@ deinit_coin(EV_P_ coin_ctx_t ctx)
 	ev_io_stop(EV_A_ ctx->watcher);
 
 	/* shutdown the network socket */
-	if (ctx->ss != NULL) {
-		close_tls(ctx->ss);
+	if (ctx->ws != NULL) {
+		ws_close(ctx->ws);
 	}
-	ctx->ss = NULL;
+	ctx->ws = NULL;
 
 	/* set the state to unknown */
 	ctx->st = COIN_ST_UNK;
-	boff = 0U;
+	gbof = INI_GBOF;
 	return;
 }
 
@@ -737,13 +536,13 @@ prepare(EV_P_ ev_prepare *w, int UNUSED(revents))
 
 unroll:
 	/* connection reset */
-	toout_logline("restart in 3", 12);
+	loghim("restart in 3", 12);
 	sleep(1);
-	toout_logline("restart in 2", 12);
+	loghim("restart in 2", 12);
 	sleep(1);
-	toout_logline("restart in 1", 12);
+	loghim("restart in 1", 12);
 	sleep(1);
-	toout_logline("restart", 7);
+	loghim("restart", 7);
 	ctx->nothing = 0;
 	ctx->st = COIN_ST_RECONN;
 	return;

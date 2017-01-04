@@ -182,7 +182,8 @@ btcc2b_LDFLAGS = $(AM_LDFLAGS)
 BUILT_SOURCES += btcc2b.yucc
 
 bin_PROGRAMS += bitmex
-bitmex_SOURCES = bitmex.c bitmex.yuck
+bitmex_SOURCES = ws.c ws.h
+bitmex_SOURCES += bitmex.c bitmex.yuck
 bitmex_SOURCES += nifty.h
 bitmex_SOURCES += tls.c tls.h
 bitmex_SOURCES += version.c version.h

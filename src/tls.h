@@ -14,6 +14,8 @@ extern size_t hmac(char *restrict buf, size_t bsz,
 		   const char *msg, size_t len,
 		   const char *key, size_t ksz);
 
+extern ssl_ctx_t conn_tls(int s);
+
 
 static inline ssize_t
 tls_send(ssl_ctx_t c, const void *buf, size_t len, int flags)
