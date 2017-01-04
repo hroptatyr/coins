@@ -181,6 +181,18 @@ btcc2b_CPPFLAGS += -DSOH='"|"'
 btcc2b_LDFLAGS = $(AM_LDFLAGS)
 BUILT_SOURCES += btcc2b.yucc
 
+bin_PROGRAMS += bitmex
+bitmex_SOURCES = bitmex.c bitmex.yuck
+bitmex_SOURCES += nifty.h
+bitmex_SOURCES += tls.c tls.h
+bitmex_SOURCES += version.c version.h
+bitmex_CPPFLAGS = $(AM_CPPFLAGS)
+bitmex_CPPFLAGS += $(ev_CFLAGS)
+bitmex_LDFLAGS = $(AM_LDFLAGS)
+bitmex_LDFLAGS += $(ev_LIBS)
+bitmex_LDADD = $(LIBEV_LIBS) -lssl -lcrypto
+BUILT_SOURCES += bitmex.yucc
+
 
 CLEANFILES += version.c
 EXTRA_DIST += version.c.in
