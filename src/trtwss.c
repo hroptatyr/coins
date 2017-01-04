@@ -703,7 +703,7 @@ static void
 requst_coin(EV_P_ coin_ctx_t ctx)
 {
 	static const char greq[] = "\
-GET /app/8458eb6fbd288f0cf3d8?protocol=7 HTTP/1.1\r\n\
+GET /app/bb1fafdf79a00453b5af?protocol=7 HTTP/1.1\r\n\
 Host: " API_HOST "\r\n\
 Pragma: no-cache\r\n\
 Origin: http://coinmatch.com\r\n\
