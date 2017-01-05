@@ -343,7 +343,10 @@ again:
 
 	case 0x8U:
 		/* close */
+		fputs("CLOS!!!\n", stderr);
+		break;
 	default:
+		fputs("HUH?!?!\n", stderr);
 		break;
 	}
 	if ((pp += pz) < (size_t)nrd) {
