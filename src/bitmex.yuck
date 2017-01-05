@@ -1,0 +1,3 @@
+Usage: bitmex [INSTR]...
+
+Subscribe to INSTRs on the bitmex exchange.
