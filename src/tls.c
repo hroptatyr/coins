@@ -10,7 +10,6 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <errno.h>
-#include <openssl/hmac.h>
 #include "tls.h"
 #include "nifty.h"
 
@@ -127,41 +126,6 @@ close_tls(ssl_ctx_t c)
 		}
 	}
 	return 0;
-}
-
-size_t hmac(
-	char *restrict buf, size_t bsz,
-	const char *msg, size_t len,
-	const char *key, size_t ksz)
-{
-	unsigned int hlen = bsz;
-	unsigned char *sig = HMAC(
-		EVP_sha256(), key, ksz,
-		(const unsigned char*)msg, len,
-		NULL, &hlen);
-
-	/* hexl him */
-	for (size_t i = 0U; i < hlen * 2U; i += 2U) {
-		buf[i + 0U] = (char)((unsigned char)(sig[i / 2U] >> 4U) & 0xfU);
-		buf[i + 1U] = (char)((unsigned char)(sig[i / 2U] >> 0U) & 0xfU);
-	}
-	for (size_t i = 0U; i < hlen * 2U; i++) {
-		if ((unsigned char)buf[i] < 10U) {
-			buf[i] ^= '0';
-		} else {
-			buf[i] += 'W';
-		}
-	}
-	return hlen;
-}
-
-size_t
-sha256(char *restrict buf, size_t bsz, const char *msg, size_t len)
-{
-	unsigned char *sig = SHA256((const unsigned char*)msg, len, NULL);
-
-	/* base64 him */
-	return EVP_EncodeBlock((unsigned char*)buf, sig, 256U / 8U);
 }
 
 /* tls.c ends here */

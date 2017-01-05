@@ -10,12 +10,7 @@ typedef void *ssl_ctx_t;
 extern ssl_ctx_t open_tls(const char *host, short unsigned int port);
 extern int close_tls(ssl_ctx_t);
 
-extern size_t hmac(char *restrict buf, size_t bsz,
-		   const char *msg, size_t len,
-		   const char *key, size_t ksz);
-
-extern size_t sha256(char *restrict b, size_t z, const char *msg, size_t len);
-
+/* for ws.[ch] convenience */
 extern ssl_ctx_t conn_tls(int s);
 
 

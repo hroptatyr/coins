@@ -17,6 +17,7 @@
 #include <errno.h>
 #undef EV_COMPAT3
 #include <ev.h>
+#include <openssl/sha.h>
 #include "ws.h"
 #include "tls.h"
 #include "nifty.h"
@@ -149,6 +150,15 @@ close_sock(int fd)
 	fdatasync(fd);
 	shutdown(fd, SHUT_RDWR);
 	return close(fd);
+}
+
+static size_t
+sha256(char *restrict buf, size_t UNUSED(bsz), const char *msg, size_t len)
+{
+	unsigned char *sig = SHA256((const unsigned char*)msg, len, NULL);
+
+	/* base64 him */
+	return EVP_EncodeBlock((unsigned char*)buf, sig, 256U / 8U);
 }
 
 
