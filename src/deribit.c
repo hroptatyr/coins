@@ -70,6 +70,7 @@ struct coin_ctx_s {
 	/* libev's idea of the socket below */
 	ev_io watcher[1];
 	ev_timer timer[1];
+	ev_timer pingt[1];
 	ev_signal sigi[1];
 	ev_signal sigp[1];
 	ev_signal sigh[1];
@@ -323,18 +324,6 @@ ws_cb(EV_P_ ev_io *w, int UNUSED(revents))
 
 unroll:
 	/* connection reset */
-	loghim("restart in 9", 12);
-	sleep(1);
-	loghim("restart in 8", 12);
-	sleep(1);
-	loghim("restart in 7", 12);
-	sleep(1);
-	loghim("restart in 6", 12);
-	sleep(1);
-	loghim("restart in 5", 12);
-	sleep(1);
-	loghim("restart in 4", 12);
-	sleep(1);
 	loghim("restart in 3", 12);
 	sleep(1);
 	loghim("restart in 2", 12);
@@ -344,6 +333,7 @@ unroll:
 	loghim("restart", 7);
 	ctx->nothing = 0;
 	ctx->st = COIN_ST_RECONN;
+	ev_timer_stop(EV_A_ ctx->pingt);
 	return;
 }
 
@@ -384,6 +374,16 @@ silence_cb(EV_PU_ ev_timer *w, int UNUSED(revents))
 			break;
 		}
 	}
+	return;
+}
+
+static void
+ping_cb(EV_PU_ ev_timer *w, int UNUSED(revents))
+{
+	coin_ctx_t ctx = w->data;
+
+	fputs("PING!!!\n", stderr);
+	ws_send(ctx->ws, "PING", 4U, 0);
 	return;
 }
 
@@ -502,12 +502,14 @@ prepare(EV_P_ ev_prepare *w, int UNUSED(revents))
 	case COIN_ST_UNK:
 		/* initialise everything, sets the state */
 		init_coin(EV_A_ ctx);
-		break;
-
+		if (ctx->st != COIN_ST_CONN) {
+			break;
+		}
 	case COIN_ST_CONN:
 	case COIN_ST_CONND:
 		/* waiting for that HTTP 101 */
 		subscr_coin(EV_A_ ctx);
+		ev_timer_start(EV_A_ ctx->pingt);
 		break;
 
 	case COIN_ST_JOIN:
@@ -563,6 +565,8 @@ init_ev(EV_P_ coin_ctx_t ctx)
 	/* inc nothing counter every 3 seconds */
 	ev_timer_init(ctx->timer, silence_cb, 0.0, TIMEOUT);
 	ctx->timer->data = ctx;
+	ev_timer_init(ctx->pingt, ping_cb, TIMEOUT, TIMEOUT);
+	ctx->pingt->data = ctx;
 
 	/* the midnight tick for file rotation, also upon sighup */
 	ev_periodic_init(ctx->midnight, midnight_cb, MIDNIGHT, ONE_DAY, NULL);
@@ -583,6 +587,7 @@ static void
 deinit_ev(EV_P_ coin_ctx_t ctx)
 {
 	ev_timer_stop(EV_A_ ctx->timer);
+	ev_timer_stop(EV_A_ ctx->pingt);
 	ev_signal_stop(EV_A_ ctx->sigi);
 	ev_signal_stop(EV_A_ ctx->sigp);
 

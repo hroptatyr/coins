@@ -343,7 +343,7 @@ again:
 
 	case 0x8U:
 		/* close */
-		fputs("CLOS!!!\n", stderr);
+		rp += memncpy((char*)buf + rp, "CLOS!!!\n", 8U);
 		break;
 	default:
 		fputs("HUH?!?!\n", stderr);
@@ -413,9 +413,22 @@ ws_send(ws_t ws, const void *buf, size_t bsz, int flags)
 }
 
 int
+ws_ping(ws_t ws)
+{
+	static const char ping[] = {0x89, 0x80, 0x00, 0x00, 0x00, 0x00};
+	_Static_assert(sizeof(ping) == 6, "PING frame of wrong size");
+
+	if (ws->c) {
+		return (tls_send(ws->c, ping, sizeof(ping), 0) >= 0) - 1U;
+	}
+	return (send(ws->s, ping, sizeof(ping), 0) >= 0) - 1U;
+}
+
+int
 ws_pong(ws_t ws)
 {
-	static const char pong[] = {0x8a, 0x00};
+	static const char pong[] = {0x8a};
+	_Static_assert(sizeof(pong) == 1, "PONG frame of wrong size");
 
 	if (ws->c) {
 		return (tls_send(ws->c, pong, sizeof(pong), 0) >= 0) - 1U;

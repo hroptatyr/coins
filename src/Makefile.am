@@ -208,6 +208,19 @@ deribit_LDFLAGS += $(ev_LIBS)
 deribit_LDADD = $(LIBEV_LIBS) -lssl -lcrypto
 BUILT_SOURCES += deribit.yucc
 
+bin_PROGRAMS += derifix
+derifix_SOURCES = derifix.c derifix.yuck
+derifix_SOURCES += nifty.h
+derifix_SOURCES += fix.c fix.h
+derifix_SOURCES += version.c version.h
+derifix_SOURCES += ../cex_cred.h
+derifix_CPPFLAGS = $(AM_CPPFLAGS)
+derifix_CPPFLAGS += $(ev_CFLAGS)
+derifix_LDFLAGS = $(AM_LDFLAGS)
+derifix_LDFLAGS += $(ev_LIBS)
+derifix_LDADD = $(LIBEV_LIBS) -lcrypto
+BUILT_SOURCES += deribit.yucc
+
 bin_PROGRAMS += trtwss
 trtwss_SOURCES = trtwss.c trtwss.yuck
 trtwss_SOURCES += ws.c ws.h
