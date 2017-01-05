@@ -155,4 +155,13 @@ size_t hmac(
 	return hlen;
 }
 
+size_t
+sha256(char *restrict buf, size_t bsz, const char *msg, size_t len)
+{
+	unsigned char *sig = SHA256((const unsigned char*)msg, len, NULL);
+
+	/* base64 him */
+	return EVP_EncodeBlock((unsigned char*)buf, sig, 256U / 8U);
+}
+
 /* tls.c ends here */

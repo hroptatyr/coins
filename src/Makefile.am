@@ -194,6 +194,20 @@ bitmex_LDFLAGS += $(ev_LIBS)
 bitmex_LDADD = $(LIBEV_LIBS) -lssl -lcrypto
 BUILT_SOURCES += bitmex.yucc
 
+bin_PROGRAMS += deribit
+deribit_SOURCES = deribit.c deribit.yuck
+deribit_SOURCES += ws.c ws.h
+deribit_SOURCES += nifty.h
+deribit_SOURCES += tls.c tls.h
+deribit_SOURCES += version.c version.h
+deribit_SOURCES += ../cex_cred.h
+deribit_CPPFLAGS = $(AM_CPPFLAGS)
+deribit_CPPFLAGS += $(ev_CFLAGS)
+deribit_LDFLAGS = $(AM_LDFLAGS)
+deribit_LDFLAGS += $(ev_LIBS)
+deribit_LDADD = $(LIBEV_LIBS) -lssl -lcrypto
+BUILT_SOURCES += deribit.yucc
+
 
 CLEANFILES += version.c
 EXTRA_DIST += version.c.in

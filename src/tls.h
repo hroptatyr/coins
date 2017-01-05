@@ -14,6 +14,8 @@ extern size_t hmac(char *restrict buf, size_t bsz,
 		   const char *msg, size_t len,
 		   const char *key, size_t ksz);
 
+extern size_t sha256(char *restrict b, size_t z, const char *msg, size_t len);
+
 extern ssl_ctx_t conn_tls(int s);
 
 

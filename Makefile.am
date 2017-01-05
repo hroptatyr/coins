@@ -24,11 +24,12 @@ dist-hook:
 	chmod ugo-w $(distdir)/.version
 	cp $(top_srcdir)/dummy_cred.h $(distdir)/cex_cred.h
 	cp $(top_srcdir)/dummy_cred.h $(distdir)/okcoin_cred.h
+	cp $(top_srcdir)/dummy_cred.h $(distdir)/deribit_cred.h
 
 BUILT_SOURCES += cex_cred.h
 BUILT_SOURCES += okcoin_cred.h
 EXTRA_DIST += dummy_cred.h
-cex_cred.h okcoin_cred.h: dummy_cred.h
+cex_cred.h okcoin_cred.h deribit_cred.h: dummy_cred.h
 	cp $< $@
 
 ## Makefile.am ends here
