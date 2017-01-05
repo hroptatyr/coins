@@ -334,6 +334,7 @@ again:
 		} else {
 			send(ws->s, buf, pp + pz, 0);
 		}
+		rp += memncpy(buf + rp, "PING!!!\n", 8U);
 	case 0xaU:
 		/* pong */
 		break;
