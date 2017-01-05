@@ -279,7 +279,7 @@ ws_cb(EV_P_ ev_io *w, int UNUSED(revents))
 
 	if ((nrd = ws_recv(ctx->ws, gbuf + gbof, maxr, 0)) <= 0) {
 		/* connexion reset or something? */
-		serror("recv(%d) failed", w->fd);
+		serror("recv(%d) failed, read %zi", w->fd, nrd);
 		goto unroll;
 	}
 
