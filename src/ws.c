@@ -42,9 +42,16 @@ static char *gbuf;
 static size_t gbsz;
 
 static inline size_t
-memncpy(char *restrict buf, const char *src, size_t zrc)
+memncpy(void *restrict buf, const void *src, size_t zrc)
 {
 	memcpy(buf, src, zrc);
+	return zrc;
+}
+
+static inline size_t
+memnmove(void *tgt, const void *src, size_t zrc)
+{
+	memmove(tgt, src, zrc);
 	return zrc;
 }
 
@@ -437,33 +444,28 @@ again:
 		/* text */
 	case 0x2U:
 		/* binary */
-		memmove(buf + rp, buf + pp, pz);
-		rp += pz;
+		rp += memnmove(buf + rp, buf + pp, pz);
 		buf[rp] = '\n';
 		rp += !ws->togo;
 		break;
 
 	case 0x9U:
 		/* ping, respond immediately */
-		with (uint8_t *bp = buf) {
-			/* swap ping for pong */
-			bp[0U] ^= 0b11U;
-		}
-		if (ws->c) {
-			tls_send(ws->c, buf, pp + pz, 0);
-		} else {
-			send(ws->s, buf, pp + pz, 0);
-		}
-		rp += memncpy((char*)buf + rp, "PING!!!\n", 8U);
+		ws_pong(ws, buf + pp, pz);
+		rp += memnmove(buf + rp, buf + pp, pz);
+		buf[rp++] = '\n';
 		break;
 	case 0xaU:
 		/* pong */
-		rp += memncpy((char*)buf + rp, "PONG!!!\n", 8U);
+		rp += memnmove(buf + rp, buf + pp, pz);
+		buf[rp++] = '\n';
 		break;
 
 	case 0x8U:
 		/* close */
-		rp += memncpy((char*)buf + rp, "CLOS!!!\n", 8U);
+		rp += memncpy(buf + rp, "CLOS!!! ", 8U);
+		rp += memnmove(buf + rp, buf + pp, pz);
+		buf[rp++] = '\n';
 		break;
 	default:
 		fputs("HUH?!?!\n", stderr);
@@ -533,23 +535,53 @@ ws_send(ws_t ws, const void *buf, size_t bsz, int flags)
 }
 
 int
-ws_ping(ws_t ws)
+ws_ping(ws_t ws, const void *msg, size_t msz)
 {
-	static const char ping[] = {0x89, 0x80, 0x00, 0x00, 0x00, 0x00};
-	_Static_assert(sizeof(ping) == 6, "PING frame of wrong size");
+	static const char _ping[] = {0x89, 0x80, 0x00, 0x00, 0x00, 0x00};
+	char buf[sizeof(_ping) + msz];
+	size_t pinz = sizeof(_ping);
+	const char *ping = _ping;
 
-	if (ws->c) {
-		return (tls_send(ws->c, ping, sizeof(ping), 0) >= 0) - 1U;
+	_Static_assert(sizeof(_ping) == 6U, "PING frame of wrong size");
+
+	if (UNLIKELY(msz > 0U)) {
+		if (UNLIKELY(msz > 125U)) {
+			msz = 125U;
+		}
+		buf[0U] = 0x8a;
+		buf[1U] = 0x80 ^ msz;
+		/* masking key */
+		buf[2U] = buf[3U] = buf[4U] = buf[5] = 0;
+		memcpy(buf + sizeof(_ping), msg, msz);
+		ping = buf, pinz = sizeof(_ping) + msz;
 	}
-	return (send(ws->s, ping, sizeof(ping), 0) >= 0) - 1U;
+	if (ws->c) {
+		return (tls_send(ws->c, ping, pinz, 0) >= 0) - 1U;
+	}
+	return (send(ws->s, ping, pinz, 0) >= 0) - 1U;
 }
 
 int
-ws_pong(ws_t ws)
+ws_pong(ws_t ws, const void *msg, size_t msz)
 {
-	static const char pong[] = {0x8a};
-	_Static_assert(sizeof(pong) == 1, "PONG frame of wrong size");
+	static const char _pong[] = {0x8a, 0x80, 0x00, 0x00, 0x00, 0x00};
+	char buf[sizeof(_pong) + msz];
+	size_t ponz = sizeof(_pong);
+	const char *pong = _pong;
 
+	_Static_assert(sizeof(_pong) == 6U, "PONG frame of wrong size");
+
+	if (UNLIKELY(msz > 0U)) {
+		if (UNLIKELY(msz > 125U)) {
+			msz = 125U;
+		}
+		buf[0U] = 0x8a;
+		buf[1U] = 0x80 ^ msz;
+		/* masking key */
+		buf[2U] = buf[3U] = buf[4U] = buf[5] = 0;
+		memcpy(buf + sizeof(_pong), msg, msz);
+		pong = buf, ponz = sizeof(_pong) + msz;
+	}
 	if (ws->c) {
 		return (tls_send(ws->c, pong, sizeof(pong), 0) >= 0) - 1U;
 	}

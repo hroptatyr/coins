@@ -14,8 +14,8 @@ extern ssize_t ws_recv(ws_t, void *restrict buf, size_t bsz, int flags);
 extern ssize_t ws_send(ws_t, const void *buf, size_t bsz, int flags);
 
 /* special methods */
-extern int ws_ping(ws_t ws);
-extern int ws_pong(ws_t ws);
+extern int ws_ping(ws_t ws, const void *msg, size_t msz);
+extern int ws_pong(ws_t ws, const void *msg, size_t msz);
 
 
 /* inlines */
