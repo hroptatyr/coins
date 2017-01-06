@@ -47,6 +47,8 @@ hitwss_CPPFLAGS = $(AM_CPPFLAGS)
 hitwss_CPPFLAGS += $(ev_CFLAGS)
 hitwss_LDFLAGS = $(AM_LDFLAGS)
 hitwss_LDFLAGS += $(ev_LIBS)
+hitwss_LDFLAGS += $(ws_LIBS)
+hitwss_LDADD = libws.a
 BUILT_SOURCES += hitwss.yucc
 
 bin_PROGRAMS += hit2b
