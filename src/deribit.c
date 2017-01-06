@@ -270,6 +270,9 @@ rotate_outfile(void)
 }
 
 
+static const char *sline;
+static size_t sllen;
+
 static void
 ws_cb(EV_P_ ev_io *w, int UNUSED(revents))
 {
@@ -383,7 +386,7 @@ ping_cb(EV_PU_ ev_timer *w, int UNUSED(revents))
 	coin_ctx_t ctx = w->data;
 
 	fputs("PING!!!\n", stderr);
-	ws_send(ctx->ws, "PING", 4U, 0);
+	ws_send(ctx->ws, sline, sllen, 0);
 	return;
 }
 
@@ -418,13 +421,18 @@ subscr_coin(EV_P_ coin_ctx_t ctx)
 }";
 	size_t z;
 
-	z = strlenof(sub) - 48U;
-	z += sha256(sub + z, strlenof(sub) - z, sig, strlenof(sig));
-	sub[z++] = '"';
-	sub[z++] = '}';
+	if (!sllen) {
+		z = strlenof(sub) - 48U;
+		z += sha256(sub + z, strlenof(sub) - z, sig, strlenof(sig));
+		sub[z++] = '"';
+		sub[z++] = '}';
+		/* store him */
+		sline = sub;
+		sllen = z;
+	}
 
-	ws_send(ctx->ws, sub, z, 0);
-	fwrite(sub, 1, z, stderr);
+	ws_send(ctx->ws, sline, sllen, 0);
+	fwrite(sline, 1, sllen, stderr);
 	fputc('\n', stderr);
 
 	/* reset nothing counter and start the nothing timer */
