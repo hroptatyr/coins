@@ -141,6 +141,43 @@ Connection: Upgrade\r\n\
 	return nrd;
 }
 
+static ssize_t
+wamp_init(ws_t ws, const char *host, const char *rsrc, size_t rlen)
+{
+	static const char greq[] = "\
+Sec-WebSocket-Version: 13\r\n\
+Sec-WebSocket-Key: e8w+o5wQsV0rXFezPUS8XQ==\r\n\
+Sec-WebSocket-Protocol: wamp.2.json\r\n\
+Upgrade: websocket\r\n\
+Connection: Upgrade\r\n\
+\r\n";
+	size_t nrq = 0U;
+	ssize_t nrd;
+
+	nrq += memncpy(gbuf + nrq, "GET /", 5U);
+	nrq += memncpy(gbuf + nrq, rsrc, rlen);
+	gbuf[nrq++] = ' ';
+	nrq += memncpy(gbuf + nrq, "HTTP/1.1\r\nHost: ", 16U);
+	nrq += memncpy(gbuf + nrq, host, strlen(host));
+	gbuf[nrq++] = '\r';
+	gbuf[nrq++] = '\n';
+	nrq += memncpy(gbuf + nrq, greq, strlenof(greq));
+
+	fwrite(gbuf, 1, nrq, stderr);
+	if (ws->c) {
+		tls_send(ws->c, gbuf, nrq, 0);
+		nrd = tls_recv(ws->c, gbuf, gbsz, 0);
+	} else {
+		send(ws->s, gbuf, nrq, 0);
+		nrd = recv(ws->s, gbuf, gbsz, 0);
+	}
+	if (UNLIKELY(nrd <= 0)) {
+		return -1;
+	}
+	fwrite(gbuf, 1, nrd, stderr);
+	return nrd;
+}
+
 
 ws_t
 ws_open(const char *url)
@@ -215,6 +252,89 @@ ws_open(const char *url)
 
 	/* construct the request */
 	if (UNLIKELY(_init(ws, host, rsrc, buf + urz - rsrc) < 0)) {
+		goto fre;
+	}
+	return ws;
+
+fre:
+	ws_close(ws);
+nil:
+	return NULL;
+}
+
+ws_t
+wamp_open(const char *url)
+{
+	size_t urz = strlen(url);
+	char buf[urz + 1U];
+	int sslp = 0;
+	const char *host;
+	const char *rsrc;;
+	short unsigned int port;
+	char *on;
+	ws_t ws;
+
+	/* copy to stack buffer */
+	memcpy(buf, url, urz + 1U);
+
+	/* see if it contains a prefix, ws:// or wss:// */
+	do {
+		if (buf[4U] == '/') {
+			/* might do */
+			if ((buf[3U] == ':' ||
+			     buf[3U] == '/' && buf[2U] == ':') &&
+			    (buf[0U] == 'w' && buf[1U] == 's')) {
+				/* safe to say it does */
+				sslp = buf[2U] == 's';
+				host = buf + 5U + sslp;
+				break;
+			}
+		}
+		/* otherwise assume the host right away */
+		host = buf;
+	} while (0);
+
+	/* look for the resource */
+	if (UNLIKELY((on = memchr(host, '/', buf + urz - host)) == NULL)) {
+		/* ok doke, we're using / and the whole thing as host */
+		rsrc = buf + urz;
+	} else {
+		/* mark the end of host */
+		*on++ = '\0';
+		rsrc = on;
+	}
+
+	/* look out for ports in the host part */
+	if (UNLIKELY((on = memchr(host, ':', rsrc - host)) == NULL)) {
+		/* no port given */
+		port = (unsigned short)(sslp ? 443 : 80);
+	} else {
+		long unsigned int x;
+		*on++ = '\0';
+		if (UNLIKELY((x = strtoul(on, &on, 10)) == 0U)) {
+			/* cannot read port argument, fuck off */
+			goto nil;
+		} else if (UNLIKELY(x >= 65536U)) {
+			goto nil;
+		}
+		/* all is good */
+		port = x;
+	}
+
+	if (UNLIKELY(gbsz < 4096U)) {
+		gbsz = 4096U;
+		if (UNLIKELY((gbuf = malloc(gbsz)) == NULL)) {
+			goto nil;
+		}
+	}
+
+	/* try and establish a connection */
+	if (UNLIKELY((ws = _open(host, port, sslp)) == NULL)) {
+		goto nil;
+	}
+
+	/* construct the request */
+	if (UNLIKELY(wamp_init(ws, host, rsrc, buf + urz - rsrc) < 0)) {
 		goto fre;
 	}
 	return ws;
