@@ -223,6 +223,7 @@ BUILT_SOURCES += trtwss.yucc
 bin_PROGRAMS += gemini
 gemini_SOURCES = gemini.c gemini.yuck
 gemini_SOURCES += nifty.h
+gemini_SOURCES += ws.c ws.h
 gemini_SOURCES += tls.c tls.h
 gemini_SOURCES += version.c version.h
 gemini_CPPFLAGS = $(AM_CPPFLAGS)
