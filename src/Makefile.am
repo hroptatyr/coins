@@ -8,11 +8,17 @@ AM_LDFLAGS = $(XCCLDFLAGS)
 
 bin_PROGRAMS =
 noinst_PROGRAMS =
-noinst_LTLIBRARIES =
+noinst_LIBRARIES =
 BUILT_SOURCES =
 EXTRA_DIST = $(BUILT_SOURCES)
 CLEANFILES =
 SUFFIXES =
+
+noinst_LIBRARIES += libws.a
+libws_a_SOURCES =
+libws_a_SOURCES += ws.c ws.h
+libws_a_SOURCES += tls.c tls.h
+ws_LIBS = -lssl -lcrypto
 
 bin_PROGRAMS += coin
 coin_SOURCES = coin.c coin.yuck
@@ -41,6 +47,8 @@ hitwss_CPPFLAGS = $(AM_CPPFLAGS)
 hitwss_CPPFLAGS += $(ev_CFLAGS)
 hitwss_LDFLAGS = $(AM_LDFLAGS)
 hitwss_LDFLAGS += $(ev_LIBS)
+hitwss_LDFLAGS += $(ws_LIBS)
+hitwss_LDADD = libws.a
 BUILT_SOURCES += hitwss.yucc
 
 bin_PROGRAMS += hit2b
