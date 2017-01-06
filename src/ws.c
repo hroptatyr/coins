@@ -431,7 +431,7 @@ again:
 	pp += fr.mask ? sizeof(fr.mkey) : 0U;
 
 	if (pz + pp > (size_t)nrd) {
-		fprintf(stderr, "CONT?  need %zu  got %zu\n", pz, nrd - pp);
+		fprintf(stderr, "CONT?  need %zu  got %zu %zu->%zd\n", pz, nrd - pp, pp, nrd);
 		pz -= nrd - pp;
 		ws->togo = pz;
 		pz = nrd - pp;
@@ -473,7 +473,7 @@ again:
 		fputs("HUH?!?!\n", stderr);
 		break;
 	}
-	if ((pp += pz) < (size_t)nrd) {
+	if ((pp += pz) < (size_t)nrd - 1U) {
 		/* more frames, good for us */
 		goto again;
 	}
