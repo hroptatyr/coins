@@ -91,7 +91,8 @@ plxwss_CPPFLAGS = $(AM_CPPFLAGS)
 plxwss_CPPFLAGS += $(ev_CFLAGS)
 plxwss_LDFLAGS = $(AM_LDFLAGS)
 plxwss_LDFLAGS += $(ev_LIBS)
-plxwss_LDADD = -lssl -lcrypto
+plxwss_LDFLAGS += $(ws_LIBS)
+plxwss_LDADD = libws.a
 BUILT_SOURCES += plxwss.yucc
 
 bin_PROGRAMS += plx2b

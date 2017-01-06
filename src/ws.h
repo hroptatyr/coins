@@ -7,6 +7,7 @@ typedef struct ws_s *ws_t;
 
 
 extern ws_t ws_open(const char *url);
+extern ws_t wamp_open(const char *url);
 extern int ws_close(ws_t);
 
 extern ssize_t ws_recv(ws_t, void *restrict buf, size_t bsz, int flags);
