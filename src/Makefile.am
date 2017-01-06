@@ -110,9 +110,12 @@ btsp_SOURCES += tls.c tls.h
 btsp_SOURCES += version.c version.h
 btsp_SOURCES += boobs.h
 btsp_SOURCES += nifty.h
-btsp_CPPFLAGS = $(AM_CPPFLAGS) $(LIBEV_CPPFLAGS)
-btsp_LDFLAGS = $(AM_LDFLAGS)  $(LIBEV_LDFLAGS)
-btsp_LDADD = $(LIBEV_LIBS) -lssl -lcrypto
+btsp_CPPFLAGS = $(AM_CPPFLAGS)
+btsp_CPPFLAGS += $(ev_CFLAGS)
+btsp_LDFLAGS = $(AM_LDFLAGS)
+btsp_LDFLAGS += $(ev_LIBS)
+btsp_LDFLAGS += $(ws_LIBS)
+btsp_LDADD = libws.a
 BUILT_SOURCES += btsp.yucc
 
 bin_PROGRAMS += btsp2b
