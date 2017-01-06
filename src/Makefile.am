@@ -233,6 +233,19 @@ trtwss_LDFLAGS = $(AM_LDFLAGS)  $(LIBEV_LDFLAGS)
 trtwss_LDADD = $(LIBEV_LIBS) -lssl -lcrypto
 BUILT_SOURCES += trtwss.yucc
 
+bin_PROGRAMS += gemini
+gemini_SOURCES = gemini.c gemini.yuck
+gemini_SOURCES += nifty.h
+gemini_SOURCES += ws.c ws.h
+gemini_SOURCES += tls.c tls.h
+gemini_SOURCES += version.c version.h
+gemini_CPPFLAGS = $(AM_CPPFLAGS)
+gemini_CPPFLAGS += $(ev_CFLAGS)
+gemini_LDFLAGS = $(AM_LDFLAGS)
+gemini_LDFLAGS += $(ev_LIBS)
+gemini_LDADD = $(LIBEV_LIBS) -lssl -lcrypto
+BUILT_SOURCES += gemini.yucc
+
 
 CLEANFILES += version.c
 EXTRA_DIST += version.c.in
