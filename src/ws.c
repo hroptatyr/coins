@@ -451,19 +451,21 @@ again:
 
 	case 0x9U:
 		/* ping, respond immediately */
+		fputs("PING???", stderr);
 		ws_pong(ws, buf + pp, pz);
+		fputs("PONG!!!", stderr);
 		rp += memnmove(buf + rp, buf + pp, pz);
 		buf[rp++] = '\n';
 		break;
 	case 0xaU:
 		/* pong */
+		fputs("PONG!!!", stderr);
 		rp += memnmove(buf + rp, buf + pp, pz);
 		buf[rp++] = '\n';
 		break;
 
 	case 0x8U:
 		/* close */
-		rp += memncpy(buf + rp, "CLOS!!! ", 8U);
 		rp += memnmove(buf + rp, buf + pp, pz);
 		buf[rp++] = '\n';
 		break;
