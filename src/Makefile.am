@@ -29,7 +29,8 @@ coin_CPPFLAGS = $(AM_CPPFLAGS)
 coin_CPPFLAGS += $(ev_CFLAGS)
 coin_LDFLAGS = $(AM_LDFLAGS)
 coin_LDFLAGS += $(ev_LIBS)
-coin_LDADD = -lssl -lcrypto
+coin_LDFLAGS += $(ws_LIBS)
+coin_LDADD = libws.a
 BUILT_SOURCES += coin.yucc
 
 bin_PROGRAMS += coin2b
