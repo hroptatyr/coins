@@ -71,7 +71,8 @@ cexwss_CPPFLAGS = $(AM_CPPFLAGS)
 cexwss_CPPFLAGS += $(ev_CFLAGS)
 cexwss_LDFLAGS = $(AM_LDFLAGS)
 cexwss_LDFLAGS += $(ev_LIBS)
-cexwss_LDADD = -lssl -lcrypto
+cexwss_LDFLAGS += $(ws_LIBS)
+cexwss_LDADD = libws.a
 BUILT_SOURCES += cexwss.yucc
 
 bin_PROGRAMS += cex2b
