@@ -32,9 +32,13 @@ typedef struct  __attribute__((packed)) {
 _Static_assert(sizeof(wsfr_t) == 14, "wsfr_t is improperly packed");
 
 struct ws_s {
-	unsigned int togo;
+	unsigned int state;
 	int s;
 	ssl_ctx_t c;
+	/* size to go */
+	ssize_t togo;
+	/* frame leftovers */
+	wsfr_t frml;
 };
 
 
@@ -382,10 +386,16 @@ ws_recv(ws_t ws, void *restrict buv, size_t bsz, int flags)
 	wsfr_t fr;
 	ssize_t nrd;
 
+	if (UNLIKELY((nrd = -(size_t)ws->state & ws->togo))) {
+		/* replay stash from last time */
+		memncpy(buf, &ws->frml, nrd);
+		ws->togo = 0U;
+		ws->state = 0U;
+	}
 	if (ws->c) {
-		nrd = tls_recv(ws->c, buf, bsz, flags);
+		nrd += tls_recv(ws->c, buf + nrd, bsz - nrd, flags);
 	} else {
-		nrd = recv(ws->s, buf, bsz, flags);
+		nrd += recv(ws->s, buf + nrd, bsz - nrd, flags);
 	}
 	if (UNLIKELY(nrd <= 0)) {
 		return nrd;
@@ -471,11 +481,16 @@ again:
 		break;
 	default:
 		fputs("HUH?!?!\n", stderr);
+		abort();
 		break;
 	}
-	if ((pp += pz) < (size_t)nrd - 1U) {
+	if ((pp += pz) < (size_t)nrd - sizeof(ws->frml)) {
 		/* more frames, good for us */
-		goto again;
+		goto again;		
+	} else if (pp < (size_t)nrd) {
+		/* stuff the rest into frml and process it next */
+		ws->togo = memncpy(&ws->frml, buf + pp, nrd - pp);
+		ws->state = 1U;
 	}
 	return rp;
 }

@@ -29,14 +29,4 @@ ws_fd(ws_t ws)
 	return _s->sock;
 }
 
-static inline int
-ws_more_p(ws_t ws)
-{
-	struct {
-		unsigned int more;
-		int sock;
-	} *_s = (void*)ws;
-	return _s->more;
-}
-
 #endif	/* !INCLUDED_ws_h_ */
