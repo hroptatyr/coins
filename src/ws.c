@@ -486,7 +486,7 @@ again:
 	}
 	if ((pp += pz) + sizeof(ws->frml) < (size_t)nrd) {
 		/* more frames, good for us */
-		goto again;		
+		goto again;
 	} else if (pp < (size_t)nrd) {
 		/* stuff the rest into frml and process it next */
 		ws->togo = memncpy(&ws->frml, buf + pp, nrd - pp);
