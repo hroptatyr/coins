@@ -484,7 +484,7 @@ again:
 		abort();
 		break;
 	}
-	if ((pp += pz) < (size_t)nrd - sizeof(ws->frml)) {
+	if ((pp += pz) + sizeof(ws->frml) < (size_t)nrd) {
 		/* more frames, good for us */
 		goto again;		
 	} else if (pp < (size_t)nrd) {
