@@ -138,7 +138,8 @@ bitfin_CPPFLAGS = $(AM_CPPFLAGS)
 bitfin_CPPFLAGS += $(ev_CFLAGS)
 bitfin_LDFLAGS = $(AM_LDFLAGS)
 bitfin_LDFLAGS += $(ev_LIBS)
-bitfin_LDADD = $(LIBEV_LIBS) -lssl -lcrypto
+bitfin_LDFLAGS += $(ws_LIBS)
+bitfin_LDADD = libws.a
 BUILT_SOURCES += bitfin.yucc
 
 bin_PROGRAMS += bitfin2b
