@@ -461,15 +461,15 @@ again:
 
 	case 0x9U:
 		/* ping, respond immediately */
-		fputs("PING???", stderr);
+		fputs("PING???\n", stderr);
 		ws_pong(ws, buf + pp, pz);
-		fputs("PONG!!!", stderr);
+		fputs("PONG!!!\n", stderr);
 		rp += memnmove(buf + rp, buf + pp, pz);
 		buf[rp++] = '\n';
 		break;
 	case 0xaU:
 		/* pong */
-		fputs("PONG!!!", stderr);
+		fputs("PONG!!!\n", stderr);
 		rp += memnmove(buf + rp, buf + pp, pz);
 		buf[rp++] = '\n';
 		break;
