@@ -25,8 +25,6 @@ static char hostname[256];
 static size_t hostnsz;
 
 #define API_URL		"wss://www.bitmex.com/realtime"
-#define API_HOST	"www.bitmex.com"
-#define API_PORT	443
 
 #define TIMEOUT		6.0
 #define NTIMEOUTS	10
