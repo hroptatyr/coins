@@ -229,6 +229,7 @@ BUILT_SOURCES += gemini.yucc
 
 bin_PROGRAMS += coinfl
 coinfl_SOURCES = coinfl.c coinfl.yuck
+coinfl_SOURCES += ecp.c ecp.h
 coinfl_SOURCES += version.c version.h
 coinfl_SOURCES += ../coinfl_cred.h
 coinfl_CPPFLAGS = $(AM_CPPFLAGS)
@@ -236,6 +237,7 @@ coinfl_CPPFLAGS += $(ev_CFLAGS)
 coinfl_LDFLAGS = $(AM_LDFLAGS)
 coinfl_LDFLAGS += $(ev_LIBS)
 coinfl_LDFLAGS += $(ws_LIBS)
+coinfl_LDFLAGS += -lgmp
 coinfl_LDADD = libws.a
 BUILT_SOURCES += coinfl.yucc
 
