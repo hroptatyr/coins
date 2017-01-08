@@ -33,7 +33,7 @@ static size_t hostnsz;
 #define CLI_NNC64	"bjFNTU1yU1BJZ1dkd1VRMg=="
 
 #define TIMEOUT		6.0
-#define NTIMEOUTS	10
+#define NTIMEOUTS	50
 #define ONE_DAY		86400.0
 #define MIDNIGHT	0.0
 #define ONE_WEEK	604800.0
@@ -41,7 +41,7 @@ static size_t hostnsz;
 #define SUNDAY		302400.0
 
 /* number of seconds we tolerate inactivity in the beef channels */
-#define MAX_INACT	(30)
+#define MAX_INACT	(300)
 
 #define strlenof(x)	(sizeof(x) - 1U)
 
