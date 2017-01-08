@@ -335,6 +335,17 @@ rotate_outfile(void)
 static unsigned char sigr[64U], sigs[64U];
 static size_t zigr, zigs;
 
+static struct {
+	char ccy[4U];
+	uint32_t cod;
+} tbl[] = {
+	{"XBT", 0xf800},
+	{"EUR", 0xfa00},
+	{"GBP", 0xfa20},
+	{"USD", 0xfa80},
+	{"PLN", 0xfda8},
+};
+
 #if 0
 static void
 calc_auth(const void *nonce, size_t nonze)
@@ -630,16 +641,38 @@ Error: no signature has been computed");
 static void
 subscr_coin(EV_P_ coin_ctx_t ctx)
 {
-	static const char req[] = "{\
+	static const char fmt[] = "{\
 \"method\":\"WatchOrders\",\
-\"base\":63488,\
-\"counter\":64032,\
+\"base\":%u,\
+\"counter\":%u,\
 \"watch\":true\
 }";
+	char req[256U];
+	size_t z;
 
-	ws_send(ctx->ws, req, strlenof(req), 0);
-	fwrite(req, 1, strlenof(req), stderr);
-	fputc('\n', stderr);
+	for (size_t i = 0U; i < ctx->nsubs; i++) {
+		/* find the base */
+		size_t b, t;
+		for (b = 0U; b < countof(tbl); b++) {
+			if (!memcmp(tbl[b].ccy, ctx->subs[i] + 0U, 4U)) {
+				goto terms;
+			}
+		}
+		continue;
+	terms:
+		for (t = 0U; t < countof(tbl); t++) {
+			if (!memcmp(tbl[t].ccy, ctx->subs[i] + 4U, 4U)) {
+				goto format;
+			}
+		}
+		continue;
+	format:
+		z = snprintf(req, sizeof(req), fmt, tbl[b].cod, tbl[t].cod);
+
+		ws_send(ctx->ws, req, z, 0);
+		fwrite(req, 1, strlenof(req), stderr);
+		fputc('\n', stderr);
+	}
 
 	/* reset nothing counter and start the nothing timer */
 	ctx->nothing = 0;
@@ -838,6 +871,17 @@ main(int argc, char *argv[])
 	(void)gethostname(hostname, sizeof(hostname));
 	hostnsz = strlen(hostname);
 
+	/* check symbols */
+	for (size_t i = 0U; i < argi->nargs; i++) {
+		if (argi->args[i][3U] != '/' && argi->args[i][3U] != ':') {
+			errno = 0, serror("\
+Error: specify pairs like CCY:CCY, with CCY out of XBT, EUR, GBP, USD, PLN");
+			rc = EXIT_FAILURE;
+			goto out;
+		}
+		/* split string in two halves */
+		argi->args[i][3U] = '\0';
+	}
 	/* make sure we won't forget them subscriptions */
 	ctx->subs = argi->args;
 	ctx->nsubs = argi->nargs;
@@ -855,6 +899,7 @@ main(int argc, char *argv[])
 	deinit_ev(EV_A_ ctx);
 	ev_loop_destroy(EV_DEFAULT_UC);
 
+out:
 	/* that's it */
 	close_sock(logfd);
 	yuck_free(argi);
