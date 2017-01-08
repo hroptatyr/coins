@@ -670,7 +670,7 @@ subscr_coin(EV_P_ coin_ctx_t ctx)
 		z = snprintf(req, sizeof(req), fmt, tbl[b].cod, tbl[t].cod);
 
 		ws_send(ctx->ws, req, z, 0);
-		fwrite(req, 1, strlenof(req), stderr);
+		fwrite(req, 1, z, stderr);
 		fputc('\n', stderr);
 	}
 
