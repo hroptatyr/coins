@@ -61,6 +61,8 @@ typedef enum {
 	COIN_ST_UNK,
 	COIN_ST_CONN,
 	COIN_ST_CONND,
+	COIN_ST_AUTH,
+	COIN_ST_AUTHD,
 	COIN_ST_JOIN,
 	COIN_ST_JOIND,
 	COIN_ST_SLEEP,
@@ -333,8 +335,9 @@ rotate_outfile(void)
 static unsigned char sigr[64U], sigs[64U];
 static size_t zigr, zigs;
 
+#if 0
 static void
-authen_coin(const void *nonce, size_t nonze)
+calc_auth(const void *nonce, size_t nonze)
 {
 	static unsigned char sec[] = "00000000" API_SEC;
 	static unsigned char nnc[] = "00000000" CLI_NONCE CLI_NONCE;
@@ -386,11 +389,11 @@ authen_coin(const void *nonce, size_t nonze)
 	zigs = EVP_EncodeBlock(sigs, s, sz);
 	return;
 }
-
+#else
 #include "ecp.h"
 
 static void
-authn2_coin(const void *nonce, size_t nonze)
+calc_auth(const void *nonce, size_t nonze)
 {
 	static mp_limb_t r[MP_NLIMBS(29)], s[MP_NLIMBS(29)];
 	static mp_limb_t d[MP_NLIMBS(29)], z[MP_NLIMBS(29)];
@@ -432,6 +435,7 @@ authn2_coin(const void *nonce, size_t nonze)
 	zigs = EVP_EncodeBlock(sigs, sb, sizeof(sb));
 	return;
 }
+#endif	/* 0 */
 
 static void
 ws_cb(EV_P_ ev_io *w, int UNUSED(revents))
@@ -472,8 +476,16 @@ ws_cb(EV_P_ ev_io *w, int UNUSED(revents))
 			fwrite(nnc, 1, eon - nnc, stderr);
 			fputc('\n', stderr);
 
-			//authen_coin(nnc, eon - nnc);
-			authn2_coin(nnc, eon - nnc);
+			calc_auth(nnc, eon - nnc);
+			ctx->st = COIN_ST_AUTH;
+			break;
+		}
+		break;
+
+	case COIN_ST_AUTH:
+		for (const char *err; (err = xmemmem(gbuf + INI_GBOF, gbof + nrd - INI_GBOF, "\"error_code\":0", strlenof("\"error_code\":0")));) {
+			/* yay */
+			ctx->st = COIN_ST_AUTHD;
 			break;
 		}
 		break;
@@ -568,7 +580,7 @@ sigint_cb(EV_PU_ ev_signal *w, int UNUSED(revents))
 
 
 static void
-subscr_coin(EV_P_ coin_ctx_t ctx)
+authen_coin(EV_P_ coin_ctx_t ctx)
 {
 	static char aut[] = "{\
 \"method\":\"Authenticate\",\
@@ -577,12 +589,6 @@ subscr_coin(EV_P_ coin_ctx_t ctx)
 \"nonce\":\"" CLI_NNC64 "\",\
 \"signature\":[\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\
 \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"]\
-}";
-	static const char req[] = "{\
-method:\"WatchOrders\",\
-base:0xF800,\
-counter:0xFA20,\
-watch:true\
 }";
 	size_t z;
 
@@ -610,11 +616,30 @@ Error: no signature has been computed");
 	aut[z++] = '\n';
 	fwrite(aut, 1, z, stderr);
 
-#if 0
+	/* reset nothing counter and start the nothing timer */
+	ctx->nothing = 0;
+	ev_timer_again(EV_A_ ctx->timer);
+	gbof = INI_GBOF;
+
+	ctx->st = COIN_ST_AUTH;
+	/* initialise our last activity stamp */
+	*ctx->last_act = *tsp;
+	return;
+}
+
+static void
+subscr_coin(EV_P_ coin_ctx_t ctx)
+{
+	static const char req[] = "{\
+\"method\":\"WatchOrders\",\
+\"base\":63488,\
+\"counter\":64032,\
+\"watch\":true\
+}";
+
 	ws_send(ctx->ws, req, strlenof(req), 0);
 	fwrite(req, 1, strlenof(req), stderr);
 	fputc('\n', stderr);
-#endif
 
 	/* reset nothing counter and start the nothing timer */
 	ctx->nothing = 0;
@@ -696,6 +721,13 @@ prepare(EV_P_ ev_prepare *w, int UNUSED(revents))
 	case COIN_ST_CONN:
 	case COIN_ST_CONND:
 		/* waiting for that HTTP 101 */
+		break;
+
+	case COIN_ST_AUTH:
+		authen_coin(EV_A_ ctx);
+		break;
+	case COIN_ST_AUTHD:
+		/* subscribe */
 		subscr_coin(EV_A_ ctx);
 		break;
 
