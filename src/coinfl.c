@@ -336,7 +336,7 @@ static size_t zigr, zigs;
 static void
 authen_coin(const void *nonce, size_t nonze)
 {
-	static char sec[] = "00000000" API_SEC;
+	static unsigned char sec[] = "00000000" API_SEC;
 	static unsigned char nnc[] = "00000000" CLI_NONCE CLI_NONCE;
 	unsigned char key[28U], dgst[28U];
 	unsigned char r[64U], s[64U];
@@ -351,11 +351,23 @@ authen_coin(const void *nonce, size_t nonze)
 	EVP_DecodeBlock(nnc + sizeof(uint64_t)/*API_UID*/, nonce, nonze);
 	sha224(dgst, nnc, strlenof(nnc));
 
-	EC_KEY *K = EC_KEY_new();
-	EC_GROUP *G = EC_GROUP_new_by_curve_name(NID_secp224k1);
-	EC_KEY_set_group(K, G);
-	EC_KEY_generate_key(K);
-	BIGNUM *kbn = BN_bin2bn(key, sizeof(key), NULL);
+	BIGNUM *k;
+	/* bang private key */
+	EC_KEY *K = EC_KEY_new_by_curve_name(NID_secp224k1);
+	EC_KEY_set_asn1_flag(K, OPENSSL_EC_NAMED_CURVE);
+	k = BN_bin2bn(key, sizeof(key), NULL);
+	EC_KEY_set_private_key(K, k);
+
+	/* construct the pub key */
+	const EC_GROUP *G = EC_KEY_get0_group(K);
+	EC_POINT *P = EC_POINT_new(G);
+	if (!EC_POINT_mul(G, P, k, NULL, NULL, NULL)) {
+		serror("Error: EC_POINT_mul");
+		return;
+	}
+	EC_KEY_set_public_key(K, P);
+
+	/* ready for signing */
 	ECDSA_SIG *x = ECDSA_do_sign(dgst, sizeof(dgst), K);
 
 	if (x == NULL) {
@@ -366,8 +378,8 @@ authen_coin(const void *nonce, size_t nonze)
 	sz = BN_bn2bin(x->s, s);
 	ECDSA_SIG_free(x);
 	EC_KEY_free(K);
-	EC_GROUP_free(G);
-	BN_free(kbn);
+	EC_POINT_free(P);
+	BN_free(k);
 	zigr = EVP_EncodeBlock(sigr, r, rz);
 	zigs = EVP_EncodeBlock(sigs, s, sz);
 	return;
