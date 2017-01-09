@@ -456,7 +456,7 @@ again:
 		/* binary */
 		rp += memnmove(buf + rp, buf + pp, pz);
 		buf[rp] = '\n';
-		rp += !ws->togo;
+		rp += !ws->togo && fr.finp;
 		break;
 
 	case 0x9U:
