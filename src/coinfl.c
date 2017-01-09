@@ -346,7 +346,6 @@ static struct {
 	{"PLN", 0xfda8},
 };
 
-#if 0
 static void
 calc_auth(const void *nonce, size_t nonze)
 {
@@ -370,7 +369,7 @@ calc_auth(const void *nonce, size_t nonze)
 	BIGNUM *k;
 	/* bang private key */
 	EC_KEY *K = EC_KEY_new_by_curve_name(NID_secp224k1);
-	EC_KEY_set_asn1_flag(K, OPENSSL_EC_NAMED_CURVE);
+	//EC_KEY_set_asn1_flag(K, OPENSSL_EC_NAMED_CURVE);
 	k = BN_bin2bn(key, sizeof(key), NULL);
 	EC_KEY_set_private_key(K, k);
 
@@ -400,53 +399,6 @@ calc_auth(const void *nonce, size_t nonze)
 	zigs = EVP_EncodeBlock(sigs, s, sz);
 	return;
 }
-#else
-#include "ecp.h"
-
-static void
-calc_auth(const void *nonce, size_t nonze)
-{
-	static mp_limb_t r[MP_NLIMBS(29)], s[MP_NLIMBS(29)];
-	static mp_limb_t d[MP_NLIMBS(29)], z[MP_NLIMBS(29)];
-	uint8_t rb[28], sb[28], db[28], zb[28];
-
-	static unsigned char sec[] = "00000000" API_SEC;
-	static unsigned char nnc[] = "00000000" CLI_NONCE CLI_NONCE;
-
-	with (uint64_t x = htobe64(API_UID)) {
-		memcpy(sec, &x, sizeof(x));
-		memcpy(nnc, &x, sizeof(x));
-	}
-
-	sha224(db, sec, strlenof(sec));
-	EVP_DecodeBlock(nnc + sizeof(uint64_t)/*API_UID*/, nonce, nonze);
-	memncpy(nnc + sizeof(uint64_t)/*API_UID*/ + strlenof(CLI_NONCE),
-		CLI_NONCE, strlenof(CLI_NONCE));
-	sha224(zb, nnc, strlenof(nnc));
-
-#if GMP_LIMB_BITS == 32
-	/*
-	 * Although the field order of secp224k1 is only 28 bytes (224 bits) in
-	 * length, the curve parameters are 29 bytes in length because the cyclic
-	 * order of the generator point is slightly greater than 2**224.
-	 *
-	 * Because the input integers are 28 bytes long, we have to set the most
-	 * significant word explicitly to zero on 32-bit platforms, as it will not
-	 * be initialized by the bytes_to_mpn routine.
-	 */
-	z[sizeof *z / sizeof z - 1] = d[sizeof *d / sizeof d - 1] = 0;
-#endif
-	bytes_to_mpn(d, db, sizeof db);
-	bytes_to_mpn(z, zb, sizeof zb);
-	ecp_sign(r, s, secp224k1_p, secp224k1_a, *secp224k1_G, secp224k1_n, d, z, MP_NLIMBS(29));
-	mpn_to_bytes(rb, r, sizeof rb);
-	mpn_to_bytes(sb, s, sizeof sb);
-
-	zigr = EVP_EncodeBlock(sigr, rb, sizeof(rb));
-	zigs = EVP_EncodeBlock(sigs, sb, sizeof(sb));
-	return;
-}
-#endif	/* 0 */
 
 static void
 ws_cb(EV_P_ ev_io *w, int UNUSED(revents))
