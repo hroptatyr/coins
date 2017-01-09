@@ -24,7 +24,9 @@ tls_send(ssl_ctx_t c, const void *buf, size_t len, int flags)
 static inline ssize_t
 tls_recv(ssl_ctx_t c, void *restrict buf, size_t len, int flags)
 {
-	(void)flags;
+	if (flags & MSG_PEEK) {
+		return SSL_peek(c, buf, len);
+	}
 	return SSL_read(c, buf, len);
 }
 

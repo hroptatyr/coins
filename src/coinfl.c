@@ -17,17 +17,23 @@
 #include <errno.h>
 #undef EV_COMPAT3
 #include <ev.h>
+#include <openssl/sha.h>
+#include <openssl/ec.h>
 #include "ws.h"
+#include "tls.h"
 #include "nifty.h"
+#include "../coinfl_cred.h"
 
 static const char logfile[] = "prices";
 static char hostname[256];
 static size_t hostnsz;
 
-#define API_URL		"wss://api.poloniex.com/"
+#define API_URL		"ws://api.coinfloor.co.uk/"
+#define CLI_NONCE	"n1MMMrSPIgWdwUQ2"
+#define CLI_NNC64	"bjFNTU1yU1BJZ1dkd1VRMg=="
 
 #define TIMEOUT		6.0
-#define NTIMEOUTS	10
+#define NTIMEOUTS	50
 #define ONE_DAY		86400.0
 #define MIDNIGHT	0.0
 #define ONE_WEEK	604800.0
@@ -35,7 +41,7 @@ static size_t hostnsz;
 #define SUNDAY		302400.0
 
 /* number of seconds we tolerate inactivity in the beef channels */
-#define MAX_INACT	(30)
+#define MAX_INACT	(300)
 
 #define strlenof(x)	(sizeof(x) - 1U)
 
@@ -55,6 +61,8 @@ typedef enum {
 	COIN_ST_UNK,
 	COIN_ST_CONN,
 	COIN_ST_CONND,
+	COIN_ST_AUTH,
+	COIN_ST_AUTHD,
 	COIN_ST_JOIN,
 	COIN_ST_JOIND,
 	COIN_ST_SLEEP,
@@ -75,7 +83,7 @@ struct coin_ctx_s {
 
 	/* keep track of heart beats */
 	int nothing;
-	/* websocket context */
+	/* web socket context */
 	ws_t ws;
 	/* internal state */
 	coin_st_t st;
@@ -124,7 +132,7 @@ fputsl(FILE *fp, const char *s, size_t l)
 static struct timespec tsp[1];
 
 static inline size_t
-hrclock_print(char *buf, size_t __attribute__((unused)) len)
+hrclock_print(char *buf, size_t UNUSED(len))
 {
 	clock_gettime(CLOCK_REALTIME_COARSE, tsp);
 	return sprintf(buf, "%ld.%09li", tsp->tv_sec, tsp->tv_nsec);
@@ -149,19 +157,88 @@ close_sock(int fd)
 	return close(fd);
 }
 
-
+static char*
+xmemmem(const char *hay, const size_t hayz, const char *ndl, const size_t ndlz)
+{
+/* the one that goes NDLZ past HAY */
+	const char *const eoh = hay + hayz;
+	const char *const eon = ndl + ndlz;
+	const char *hp;
+	const char *np;
+	const char *cand;
+	unsigned int hsum;
+	unsigned int nsum;
+	unsigned int eqp;
+
+	/* trivial checks first
+         * a 0-sized needle is defined to be found anywhere in haystack
+         * then run strchr() to find a candidate in HAYSTACK (i.e. a portion
+         * that happens to begin with *NEEDLE) */
+	if (ndlz == 0UL) {
+		return deconst(hay);
+	} else if ((hay = memchr(hay, *ndl, hayz)) == NULL) {
+		/* trivial */
+		return NULL;
+	}
+
+	/* First characters of haystack and needle are the same now. Both are
+	 * guaranteed to be at least one character long.  Now computes the sum
+	 * of characters values of needle together with the sum of the first
+	 * needle_len characters of haystack. */
+	for (hp = hay + 1U, np = ndl + 1U, hsum = *hay, nsum = *hay, eqp = 1U;
+	     hp < eoh && np < eon;
+	     hsum ^= *hp, nsum ^= *np, eqp &= *hp == *np, hp++, np++);
+
+	/* HP now references the (NZ + 1)-th character. */
+	if (np < eon) {
+		/* haystack is smaller than needle, :O */
+		return NULL;
+	} else if (eqp) {
+		/* found a match */
+		return deconst(hay + ndlz);
+	}
+
+	/* now loop through the rest of haystack,
+	 * updating the sum iteratively */
+	for (cand = hay; hp < eoh; hp++) {
+		hsum ^= *cand++;
+		hsum ^= *hp;
+
+		/* Since the sum of the characters is already known to be
+		 * equal at that point, it is enough to check just NZ - 1
+		 * characters for equality,
+		 * also CAND is by design < HP, so no need for range checks */
+		if (hsum == nsum && memcmp(cand, ndl, ndlz - 1U) == 0) {
+			return deconst(cand + ndlz);
+		}
+	}
+	return NULL;
+}
+
 static inline size_t
-memncpy(char *restrict tgt, const char *src, size_t zrc)
+memncpy(void *restrict tgt, const void *src, size_t zrc)
 {
 	memcpy(tgt, src, zrc);
 	return zrc;
 }
 
-static inline size_t
-memnmove(char *tgt, const char *src, size_t zrc)
+static size_t
+sha224(unsigned char buf[static 28U], const void *msg, size_t len)
 {
-	memmove(tgt, src, zrc);
-	return zrc;
+	unsigned char *sig = SHA224((const unsigned char*)msg, len, NULL);
+
+	/* base64 him */
+	return memncpy(buf, sig, 224U / 8U);
+}
+
+
+static inline size_t
+memnmove(void *dest, const void *src, size_t n)
+{
+	if (LIKELY(n && dest != src)) {
+		memmove(dest, src, n);
+	}
+	return n;
 }
 
 static int
@@ -255,6 +332,74 @@ rotate_outfile(void)
 }
 
 
+static unsigned char sigr[64U], sigs[64U];
+static size_t zigr, zigs;
+
+static struct {
+	char ccy[4U];
+	uint32_t cod;
+} tbl[] = {
+	{"XBT", 0xf800},
+	{"EUR", 0xfa00},
+	{"GBP", 0xfa20},
+	{"USD", 0xfa80},
+	{"PLN", 0xfda8},
+};
+
+static void
+calc_auth(const void *nonce, size_t nonze)
+{
+	static unsigned char sec[] = "00000000" API_SEC;
+	static unsigned char nnc[] = "00000000" CLI_NONCE CLI_NONCE;
+	unsigned char key[28U], dgst[28U];
+	unsigned char r[64U], s[64U];
+	size_t rz, sz;
+
+	with (uint64_t x = htobe64(API_UID)) {
+		memcpy(sec, &x, sizeof(x));
+		memcpy(nnc, &x, sizeof(x));
+	}
+
+	sha224(key, sec, strlenof(sec));
+	EVP_DecodeBlock(nnc + sizeof(uint64_t)/*API_UID*/, nonce, nonze);
+	memncpy(nnc + sizeof(uint64_t)/*API_UID*/ + strlenof(CLI_NONCE),
+		CLI_NONCE, strlenof(CLI_NONCE));
+	sha224(dgst, nnc, strlenof(nnc));
+
+	BIGNUM *k;
+	/* bang private key */
+	EC_KEY *K = EC_KEY_new_by_curve_name(NID_secp224k1);
+	//EC_KEY_set_asn1_flag(K, OPENSSL_EC_NAMED_CURVE);
+	k = BN_bin2bn(key, sizeof(key), NULL);
+	EC_KEY_set_private_key(K, k);
+
+	/* construct the pub key */
+	const EC_GROUP *G = EC_KEY_get0_group(K);
+	EC_POINT *P = EC_POINT_new(G);
+	if (!EC_POINT_mul(G, P, k, NULL, NULL, NULL)) {
+		serror("Error: EC_POINT_mul");
+		return;
+	}
+	EC_KEY_set_public_key(K, P);
+
+	/* ready for signing */
+	ECDSA_SIG *x = ECDSA_do_sign(dgst, sizeof(dgst), K);
+
+	if (x == NULL) {
+		serror("Error: cannot calculate signature");
+		return;
+	}
+	rz = BN_bn2bin(x->r, r);
+	sz = BN_bn2bin(x->s, s);
+	ECDSA_SIG_free(x);
+	EC_KEY_free(K);
+	EC_POINT_free(P);
+	BN_free(k);
+	zigr = EVP_EncodeBlock(sigr, r, rz);
+	zigs = EVP_EncodeBlock(sigs, s, sz);
+	return;
+}
+
 static void
 ws_cb(EV_P_ ev_io *w, int UNUSED(revents))
 {
@@ -280,8 +425,32 @@ ws_cb(EV_P_ ev_io *w, int UNUSED(revents))
 	case COIN_ST_CONN:
 		ctx->st = COIN_ST_CONND;
 	case COIN_ST_CONND:
-		fputs("CONND\n", stderr);
-		gbof = INI_GBOF;
+		for (const char *nnc; (nnc = xmemmem(gbuf + INI_GBOF, gbof + nrd - INI_GBOF, "nonce", 5U));) {
+			const char *eon;
+
+			/* find : */
+			while (*nnc++ != ':');
+			/* find " */
+			while (*nnc++ != '"');
+			/* find " */
+			for (eon = nnc; *eon != '"'; eon++);
+
+			fputs("CONND nonce:", stderr);
+			fwrite(nnc, 1, eon - nnc, stderr);
+			fputc('\n', stderr);
+
+			calc_auth(nnc, eon - nnc);
+			ctx->st = COIN_ST_AUTH;
+			break;
+		}
+		break;
+
+	case COIN_ST_AUTH:
+		for (const char *err; (err = xmemmem(gbuf + INI_GBOF, gbof + nrd - INI_GBOF, "\"error_code\":0", strlenof("\"error_code\":0")));) {
+			/* yay */
+			ctx->st = COIN_ST_AUTHD;
+			break;
+		}
 		break;
 
 	case COIN_ST_JOIN:
@@ -374,34 +543,88 @@ sigint_cb(EV_PU_ ev_signal *w, int UNUSED(revents))
 
 
 static void
-subscr_coin(EV_P_ coin_ctx_t ctx)
+authen_coin(EV_P_ coin_ctx_t ctx)
 {
-#define MREQ	"[32, %zu, {}, \"%s\"]\r\n"
-	static char buf[256U];
+	static char aut[] = "{\
+\"method\":\"Authenticate\",\
+\"user_id\":                \
+\"cookie\":\"" API_CKY "\",\
+\"nonce\":\"" CLI_NNC64 "\",\
+\"signature\":[\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\
+\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"]\
+}";
+	size_t z;
 
-	for (size_t i = 0U; i < ctx->nsubs; i++) {
-		int len = snprintf(buf, sizeof(buf), MREQ, i, ctx->subs[i]);
-		ws_send(ctx->ws, buf, len, 0);
+	if (UNLIKELY(!zigr || !zigs)) {
+		/* no signature? */
+		errno = 0, serror("\
+Error: no signature has been computed");
+		return;
 	}
+
+	/* fill in uid */
+	aut[36U + snprintf(aut + 36U, 12U, "%d", API_UID)] = ',';
+	/* copy signatures */
+	z = strlenof(aut) - 3U - 64U - 3U - 64U;
+	z += memncpy(aut + z, sigr, zigr);
+	aut[z++] = '"';
+	aut[z++] = ',';
+	aut[z++] = '"';
+	z += memncpy(aut + z, sigs, zigs);
+	aut[z++] = '"';
+	aut[z++] = ']';
+	aut[z++] = '}';
+
+	ws_send(ctx->ws, aut, z, 0);
+	aut[z++] = '\n';
+	fwrite(aut, 1, z, stderr);
 
 	/* reset nothing counter and start the nothing timer */
 	ctx->nothing = 0;
 	ev_timer_again(EV_A_ ctx->timer);
 	gbof = INI_GBOF;
 
-	ctx->st = COIN_ST_JOIN;
+	ctx->st = COIN_ST_AUTH;
 	/* initialise our last activity stamp */
 	*ctx->last_act = *tsp;
 	return;
 }
 
 static void
-ehlo_coin(EV_P_ coin_ctx_t ctx)
+subscr_coin(EV_P_ coin_ctx_t ctx)
 {
-	static char ehlo[] =
-		"[1,\"realm1\",{\"roles\" : {\"subscriber\":{}}}]\r\n";
+	static const char fmt[] = "{\
+\"method\":\"WatchOrders\",\
+\"base\":%u,\
+\"counter\":%u,\
+\"watch\":true\
+}";
+	char req[256U];
+	size_t z;
 
-	ws_send(ctx->ws, ehlo, strlenof(ehlo), 0);
+	for (size_t i = 0U; i < ctx->nsubs; i++) {
+		/* find the base */
+		size_t b, t;
+		for (b = 0U; b < countof(tbl); b++) {
+			if (!memcmp(tbl[b].ccy, ctx->subs[i] + 0U, 4U)) {
+				goto terms;
+			}
+		}
+		continue;
+	terms:
+		for (t = 0U; t < countof(tbl); t++) {
+			if (!memcmp(tbl[t].ccy, ctx->subs[i] + 4U, 4U)) {
+				goto format;
+			}
+		}
+		continue;
+	format:
+		z = snprintf(req, sizeof(req), fmt, tbl[b].cod, tbl[t].cod);
+
+		ws_send(ctx->ws, req, z, 0);
+		fwrite(req, 1, z, stderr);
+		fputc('\n', stderr);
+	}
 
 	/* reset nothing counter and start the nothing timer */
 	ctx->nothing = 0;
@@ -423,7 +646,7 @@ init_coin(EV_P_ coin_ctx_t ctx)
 
 	fprintf(stderr, "INIT\n");
 	ev_timer_again(EV_A_ ctx->timer);
-	if ((ctx->ws = wamp_open(API_URL)) == NULL) {
+	if ((ctx->ws = ws_open(API_URL)) == NULL) {
 			serror("\
 Error: cannot connect");
 		/* retry soon, we just use the watcher for this */
@@ -478,12 +701,18 @@ prepare(EV_P_ ev_prepare *w, int UNUSED(revents))
 	case COIN_ST_UNK:
 		/* initialise everything, sets the state */
 		init_coin(EV_A_ ctx);
-		if (ctx->st != COIN_ST_CONN) {
-			break;
-		}
+		break;
+
+	case COIN_ST_CONN:
 	case COIN_ST_CONND:
 		/* waiting for that HTTP 101 */
-		ehlo_coin(EV_A_ ctx);
+		break;
+
+	case COIN_ST_AUTH:
+		authen_coin(EV_A_ ctx);
+		break;
+	case COIN_ST_AUTHD:
+		/* subscribe */
 		subscr_coin(EV_A_ ctx);
 		break;
 
@@ -515,10 +744,15 @@ prepare(EV_P_ ev_prepare *w, int UNUSED(revents))
 
 unroll:
 	/* connection reset */
-	loghim("RESTART", 7U);
+	loghim("restart in 3", 12);
+	sleep(1);
+	loghim("restart in 2", 12);
+	sleep(1);
+	loghim("restart in 1", 12);
+	sleep(1);
+	loghim("restart", 7);
 	ctx->nothing = 0;
 	ctx->st = COIN_ST_RECONN;
-	ev_unloop(EV_A_ EVUNLOOP_ALL);
 	return;
 }
 
@@ -566,7 +800,7 @@ deinit_ev(EV_P_ coin_ctx_t ctx)
 }
 
 
-#include "plxwss.yucc"
+#include "deribit.yucc"
 
 int
 main(int argc, char *argv[])
@@ -589,6 +823,17 @@ main(int argc, char *argv[])
 	(void)gethostname(hostname, sizeof(hostname));
 	hostnsz = strlen(hostname);
 
+	/* check symbols */
+	for (size_t i = 0U; i < argi->nargs; i++) {
+		if (argi->args[i][3U] != '/' && argi->args[i][3U] != ':') {
+			errno = 0, serror("\
+Error: specify pairs like CCY:CCY, with CCY out of XBT, EUR, GBP, USD, PLN");
+			rc = EXIT_FAILURE;
+			goto out;
+		}
+		/* split string in two halves */
+		argi->args[i][3U] = '\0';
+	}
 	/* make sure we won't forget them subscriptions */
 	ctx->subs = argi->args;
 	ctx->nsubs = argi->nargs;
@@ -606,10 +851,11 @@ main(int argc, char *argv[])
 	deinit_ev(EV_A_ ctx);
 	ev_loop_destroy(EV_DEFAULT_UC);
 
+out:
 	/* that's it */
 	close_sock(logfd);
 	yuck_free(argi);
 	return rc;
 }
 
-/* plxwss.c ends here */
+/* deribit.c ends here */
