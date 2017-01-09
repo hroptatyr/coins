@@ -305,8 +305,8 @@ ws_open(const char *url)
 		port = (unsigned short)(sslp ? 443 : 80);
 	} else {
 		long unsigned int x;
-		*on++ = '\0';
-		if (UNLIKELY((x = strtoul(on, &on, 10)) == 0U)) {
+		*on = '\0';
+		if (UNLIKELY((x = strtoul(on + 1U, NULL, 10)) == 0U)) {
 			/* cannot read port argument, fuck off */
 			goto nil;
 		} else if (UNLIKELY(x >= 65536U)) {
@@ -328,6 +328,10 @@ ws_open(const char *url)
 		goto nil;
 	}
 
+	/* fiddle with the port param again */
+	if (UNLIKELY(on != 0)) {
+		*on = ':';
+	}
 	/* construct the request */
 	if (UNLIKELY(_init(ws, host, rsrc, buf + urz - rsrc) < 0)) {
 		goto fre;
