@@ -405,27 +405,10 @@ ws_cb(EV_P_ ev_io *w, int UNUSED(revents))
 
 unroll:
 	/* connection reset */
-	loghim("restart in 9", 12);
-	sleep(1);
-	loghim("restart in 8", 12);
-	sleep(1);
-	loghim("restart in 7", 12);
-	sleep(1);
-	loghim("restart in 6", 12);
-	sleep(1);
-	loghim("restart in 5", 12);
-	sleep(1);
-	loghim("restart in 4", 12);
-	sleep(1);
-	loghim("restart in 3", 12);
-	sleep(1);
-	loghim("restart in 2", 12);
-	sleep(1);
-	loghim("restart in 1", 12);
-	sleep(1);
-	loghim("restart", 7);
+	loghim("RESTART", 7);
 	ctx->nothing = 0;
 	ctx->st = COIN_ST_RECONN;
+	ev_unloop(EV_A_ EVUNLOOP_ALL);
 	return;
 }
 
@@ -605,6 +588,7 @@ pong(coin_ctx_t ctx)
 	static const char pong[] = "{\"e\":\"pong\"}\r\n";
 
 	ws_send(ctx->ws, pong, strlenof(pong), 0);
+	loghim(pong, strlenof(pong) - 2U/*\r\n*/);
 	return;
 }
 
