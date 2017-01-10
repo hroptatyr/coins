@@ -671,9 +671,9 @@ ws_pong(ws_t ws, const void *msg, size_t msz)
 		pong = buf, ponz = sizeof(_pong) + msz;
 	}
 	if (ws->c) {
-		return (tls_send(ws->c, pong, sizeof(pong), 0) >= 0) - 1U;
+		return (tls_send(ws->c, pong, ponz, 0) >= 0) - 1U;
 	}
-	return (send(ws->s, pong, sizeof(pong), 0) >= 0) - 1U;
+	return (send(ws->s, pong, ponz, 0) >= 0) - 1U;
 }
 
 /* ws.c ends here */
