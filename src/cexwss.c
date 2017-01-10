@@ -640,15 +640,10 @@ prepare(EV_P_ ev_prepare *w, int UNUSED(revents))
 
 unroll:
 	/* connection reset */
-	loghim("restart in 3", 12);
-	sleep(1);
-	loghim("restart in 2", 12);
-	sleep(1);
-	loghim("restart in 1", 12);
-	sleep(1);
 	loghim("restart", 7);
 	ctx->nothing = 0;
 	ctx->st = COIN_ST_RECONN;
+	ev_unloop(EV_A_ EVUNLOOP_ALL);
 	return;
 }
 
