@@ -251,6 +251,17 @@ fast_LDFLAGS += $(ws_LIBS)
 fast_LDADD = libws.a
 BUILT_SOURCES += fast.yucc
 
+bin_PROGRAMS += ff
+ff_SOURCES = ff.c ff.yuck
+ff_SOURCES += version.c version.h
+ff_CPPFLAGS = $(AM_CPPFLAGS)
+ff_CPPFLAGS += $(ev_CFLAGS)
+ff_LDFLAGS = $(AM_LDFLAGS)
+ff_LDFLAGS += $(ev_LIBS)
+ff_LDFLAGS += $(ws_LIBS)
+ff_LDADD = libws.a
+BUILT_SOURCES += ff.yucc
+
 
 CLEANFILES += version.c
 EXTRA_DIST += version.c.in
