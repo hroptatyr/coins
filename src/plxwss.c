@@ -17,6 +17,7 @@
 #include <errno.h>
 #undef EV_COMPAT3
 #include <ev.h>
+#include <curl/curl.h>
 #include "ws.h"
 #include "nifty.h"
 
@@ -25,6 +26,8 @@ static char hostname[256];
 static size_t hostnsz;
 
 #define API_URL		"wss://api.poloniex.com/"
+#define REST_URL	"https://poloniex.com/public?command=returnOrderBook&currencyPair=all"
+#define REST_PORT	443
 
 #define TIMEOUT		6.0
 #define NTIMEOUTS	10
@@ -67,6 +70,7 @@ struct coin_ctx_s {
 	/* libev's idea of the socket below */
 	ev_io watcher[1];
 	ev_timer timer[1];
+	ev_timer restt[1];
 	ev_signal sigi[1];
 	ev_signal sigp[1];
 	ev_signal sigh[1];
@@ -77,6 +81,8 @@ struct coin_ctx_s {
 	int nothing;
 	/* websocket context */
 	ws_t ws;
+	/* rest api handle */
+	CURL *rs;
 	/* internal state */
 	coin_st_t st;
 
@@ -316,6 +322,55 @@ unroll:
 	return;
 }
 
+static size_t
+rs_cb(void *ptr, size_t mz, size_t nm, void *UNUSED(clo))
+{
+	gbof += memncpy(gbuf + gbof, ptr, mz * nm);
+	return mz * nm;
+}
+
+static void
+restt_init(coin_ctx_t ctx)
+{
+	curl_global_init(CURL_GLOBAL_ALL);
+	ctx->rs = curl_easy_init();
+
+	curl_easy_setopt(ctx->rs, CURLOPT_URL, REST_URL);
+	curl_easy_setopt(ctx->rs, CURLOPT_WRITEFUNCTION, rs_cb);
+	curl_easy_setopt(ctx->rs, CURLOPT_WRITEDATA, ctx);
+	return;
+}
+
+static void
+restt_fini(coin_ctx_t ctx)
+{
+	if (LIKELY(ctx->rs != NULL)) {
+		curl_easy_cleanup(ctx->rs);
+	}
+	ctx->rs = NULL;
+	return;
+}
+
+static void
+restt_cb(EV_PU_ ev_timer *w, int UNUSED(r))
+{
+	coin_ctx_t ctx = w->data;
+
+	if (UNLIKELY(gbof != INI_GBOF)) {
+		/* skip it for now */
+		return;
+	}
+	/* otherwise do the crawl */
+	curl_easy_perform(ctx->rs);
+
+	if (LIKELY(gbof > INI_GBOF)) {
+		gbuf[gbof++] = '\n';
+	}
+	logwss(gbuf + INI_GBOF, gbof - INI_GBOF);
+	gbof = INI_GBOF;
+	return;
+}
+
 static void
 midnight_cb(EV_PU_ ev_periodic *UNUSED(w), int UNUSED(r))
 {
@@ -430,6 +485,12 @@ Error: cannot connect");
 	ev_io_start(EV_A_ ctx->watcher);
 	ctx->watcher->data = ctx;
 	ctx->st = COIN_ST_CONN;
+
+	/* start the rest api timer */
+	restt_init(ctx);
+	ev_timer_init(ctx->restt, restt_cb, TIMEOUT, TIMEOUT);
+	ctx->restt->data = ctx;
+	ev_timer_start(EV_A_ ctx->restt);
 	return;
 }
 
@@ -445,6 +506,10 @@ deinit_coin(EV_P_ coin_ctx_t ctx)
 		ws_close(ctx->ws);
 	}
 	ctx->ws = NULL;
+
+	/* stop curling */
+	ev_timer_stop(EV_A_ ctx->restt);
+	restt_fini(ctx->rs);
 
 	/* set the state to unknown */
 	ctx->st = COIN_ST_UNK;
