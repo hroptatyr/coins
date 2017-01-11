@@ -335,7 +335,8 @@ restt_init(coin_ctx_t ctx)
 	curl_global_init(CURL_GLOBAL_ALL);
 	ctx->rs = curl_easy_init();
 
-	curl_easy_setopt(ctx->rs, CURLOPT_URL, REST_URL);
+	curl_easy_setopt(ctx->rs, CURLOPT_SSL_VERIFYPEER, 0L);
+	curl_easy_setopt(ctx->rs, CURLOPT_VERBOSE, 0L);
 	curl_easy_setopt(ctx->rs, CURLOPT_WRITEFUNCTION, rs_cb);
 	curl_easy_setopt(ctx->rs, CURLOPT_WRITEDATA, ctx);
 	return;
@@ -354,13 +355,28 @@ restt_fini(coin_ctx_t ctx)
 static void
 restt_cb(EV_PU_ ev_timer *w, int UNUSED(r))
 {
+#define URL	"GET https://poloniex.com/public?command=returnOrderBook&currencyPair="
+	static char url[256U] = URL;
 	coin_ctx_t ctx = w->data;
+	static size_t is;
 
 	if (UNLIKELY(gbof != INI_GBOF)) {
 		/* skip it for now */
 		return;
 	}
+	/* cycle instruments */
+	if (UNLIKELY(is >= ctx->nsubs)) {
+		is = 0U;
+		return;
+	}
+	/* copy instrument */
+	size_t z = strlenof(URL);
+	z += memncpy(url + z, ctx->subs[is], strlen(ctx->subs[is]));
+	url[z] = '\0';
+	is++;
 	/* otherwise do the crawl */
+	loghim(url, z);
+	curl_easy_setopt(ctx->rs, CURLOPT_URL, url + 4U/*GET */);
 	curl_easy_perform(ctx->rs);
 
 	if (LIKELY(gbof > INI_GBOF)) {
