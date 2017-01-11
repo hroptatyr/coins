@@ -15,10 +15,10 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <errno.h>
+#include <curl/curl.h>
 #undef EV_COMPAT3
 #include <ev.h>
 #include "ws.h"
-#include "tls.h"
 #include "nifty.h"
 
 static const char logfile[] = "prices";
@@ -26,8 +26,6 @@ static char hostname[256];
 static size_t hostnsz;
 
 #define API_URL		"wss://ws-feed.gdax.com/"
-#define REST_HOST	"api.gdax.com"
-#define REST_PORT	443
 
 #define TIMEOUT		6.0
 #define NTIMEOUTS	10
@@ -80,7 +78,8 @@ struct coin_ctx_s {
 	int nothing;
 	/* ssl context */
 	ws_t ws;
-	ssl_ctx_t ss;
+	/* rest api handle */
+	CURL *rs;
 	/* internal state */
 	coin_st_t st;
 
@@ -149,64 +148,6 @@ close_sock(int fd)
 	fdatasync(fd);
 	shutdown(fd, SHUT_RDWR);
 	return close(fd);
-}
-
-static char*
-xmemmem(const char *hay, const size_t hayz, const char *ndl, const size_t ndlz)
-{
-/* the one that points NDLZ behind HAY */
-	const char *const eoh = hay + hayz;
-	const char *const eon = ndl + ndlz;
-	const char *hp;
-	const char *np;
-	const char *cand;
-	unsigned int hsum;
-	unsigned int nsum;
-	unsigned int eqp;
-
-	/* trivial checks first
-         * a 0-sized needle is defined to be found anywhere in haystack
-         * then run strchr() to find a candidate in HAYSTACK (i.e. a portion
-         * that happens to begin with *NEEDLE) */
-	if (ndlz == 0UL) {
-		return deconst(hay);
-	} else if ((hay = memchr(hay, *ndl, hayz)) == NULL) {
-		/* trivial */
-		return NULL;
-	}
-
-	/* First characters of haystack and needle are the same now. Both are
-	 * guaranteed to be at least one character long.  Now computes the sum
-	 * of characters values of needle together with the sum of the first
-	 * needle_len characters of haystack. */
-	for (hp = hay + 1U, np = ndl + 1U, hsum = *hay, nsum = *hay, eqp = 1U;
-	     hp < eoh && np < eon;
-	     hsum ^= *hp, nsum ^= *np, eqp &= *hp == *np, hp++, np++);
-
-	/* HP now references the (NZ + 1)-th character. */
-	if (np < eon) {
-		/* haystack is smaller than needle, :O */
-		return NULL;
-	} else if (eqp) {
-		/* found a match */
-		return deconst(hay + ndlz);
-	}
-
-	/* now loop through the rest of haystack,
-	 * updating the sum iteratively */
-	for (cand = hay; hp < eoh; hp++) {
-		hsum ^= *cand++;
-		hsum ^= *hp;
-
-		/* Since the sum of the characters is already known to be
-		 * equal at that point, it is enough to check just NZ - 1
-		 * characters for equality,
-		 * also CAND is by design < HP, so no need for range checks */
-		if (hsum == nsum && memcmp(cand, ndl, ndlz - 1U) == 0) {
-			return deconst(cand + ndlz);
-		}
-	}
-	return NULL;
 }
 
 
@@ -376,104 +317,67 @@ unroll:
 	return;
 }
 
-static void
-ss_cb(EV_P_ ev_io *w, int UNUSED(revents))
+static size_t
+rs_cb(void *ptr, size_t mz, size_t nm, void *UNUSED(clo))
 {
-/* we know that w is part of the coin_ctx_s structure */
-	coin_ctx_t ctx = w->data;
-	size_t maxr = sizeof(gbuf) - gbof;
-	size_t clen = 0U;
-	ssize_t nrd;
+	gbof += memncpy(gbuf + gbof, ptr, mz * nm);
+	return mz * nm;
+}
 
-	if (UNLIKELY(gbof != INI_GBOF)) {
-		/* don't interfere with ws traffic */
-		return;
-	}
-more:
-	if ((nrd = tls_recv(ctx->ss, gbuf + gbof, maxr, 0)) <= 0) {
-		/* connexion reset or something? */
-		serror("recv(%d) failed, read %zi", w->fd, nrd);
-		goto unroll;
-	}
-	if (UNLIKELY(!clen)) {
-		static const char hdr[] = "Content-Length:";
-		const char *eoh;
+static void
+restt_init(coin_ctx_t ctx)
+{
+	curl_global_init(CURL_GLOBAL_ALL);
+	ctx->rs = curl_easy_init();
 
-		/* find Content-Length header */
-		eoh = xmemmem(gbuf + INI_GBOF, nrd, hdr, strlenof(hdr));
-		if (UNLIKELY(eoh == NULL)) {
-			/* oh great, just fuck it then */
-			return;
-		}
-		/* read content length */
-		clen = strtoul(eoh, NULL, 10);
-		/* find end-of-http */
-		eoh = xmemmem(gbuf + INI_GBOF, nrd, "\r\n\r\n", 4U);
-		if (UNLIKELY(eoh == NULL)) {
-			/* right, let's fuck off */
-			return;
-		}
-		nrd = memnmove(gbuf + INI_GBOF, eoh, gbuf + INI_GBOF + nrd - eoh);
-	}
-	/* add to content and check if complete*/
-	if (LIKELY((gbof += nrd) < clen + INI_GBOF)) {
-		goto more;
-	}
-	/* yep, that's it */
-	gbuf[gbof++] = '\n';
-	logwss(gbuf + INI_GBOF, gbof);
-	gbof = INI_GBOF;
-	clen = 0U;
+	curl_easy_setopt(ctx->rs, CURLOPT_SSL_VERIFYPEER, 0L);
+	curl_easy_setopt(ctx->rs, CURLOPT_VERBOSE, 0L);
+	curl_easy_setopt(ctx->rs, CURLOPT_USERAGENT, "Dark Secret Ninja/1.0");
+	curl_easy_setopt(ctx->rs, CURLOPT_WRITEFUNCTION, rs_cb);
+	curl_easy_setopt(ctx->rs, CURLOPT_WRITEDATA, ctx);
 	return;
+}
 
-unroll:
-	/* connection reset */
-	loghim("REST RESET", 10U);
-	ev_io_stop(EV_A_ ctx->watchss);
-	close_tls(ctx->ss);
-	ctx->ss = NULL;
+static void
+restt_fini(coin_ctx_t ctx)
+{
+	if (LIKELY(ctx->rs != NULL)) {
+		curl_easy_cleanup(ctx->rs);
+	}
+	ctx->rs = NULL;
 	return;
 }
 
 static void
 restt_cb(EV_PU_ ev_timer *w, int UNUSED(r))
 {
-	static char req[] = "\
-GET /products/xxx-yyy/book?level=2 HTTP/1.1\r\n\
-Host: " REST_HOST "\r\n\
-Connection: keep-alive\r\n\
-User-Agent: curl/7.0\r\n\
-Accept: */*\r\n\
-\r\n";
-	static size_t isub;
+	static char url[256U] = \
+		"GET https://api.gdax.com/products/xxx-yyy/book?level=2";
 	coin_ctx_t ctx = w->data;
-	size_t z = strlenof("GET /products/");
+	static size_t isub;
 
-	if (UNLIKELY(ctx->ss == NULL)) {
-		/* try an */
-		if ((ctx->ss = open_tls(REST_HOST, REST_PORT)) == NULL) {
-			serror("\
-Error: cannot connect to REST API");
-			return;
-		}
-		/* otherwise make him known */
-		ev_io_init(ctx->watchss, ss_cb, tls_fd(ctx->ss), EV_READ);
-		ev_io_start(EV_A_ ctx->watchss);
-		ctx->watchss->data = ctx;
+	if (UNLIKELY(gbof != INI_GBOF)) {
+		/* skip it for now */
+		return;
 	}
-
-
-	/* increment isub */
+	/* cycle instruments */
 	if (UNLIKELY(isub >= ctx->nsubs)) {
 		isub = 0U;
 		return;
 	}
 	/* copy instrument */
-	memcpy(req + z, ctx->subs[isub++], 7U);
-	z = strlenof(req);
+	memcpy(url + strlenof("GET https://api.gdax.com/products/"),
+	       ctx->subs[isub++], 7U);
+	/* otherwise do the crawl */
+	loghim(url, strlenof(url));
+	curl_easy_setopt(ctx->rs, CURLOPT_URL, url + 4U/*GET */);
+	curl_easy_perform(ctx->rs);
 
-	loghim(req, z - 4U);
-	tls_send(ctx->ss, req, z, 0);
+	if (LIKELY(gbof > INI_GBOF)) {
+		gbuf[gbof++] = '\n';
+	}
+	logwss(gbuf + INI_GBOF, gbof - INI_GBOF);
+	gbof = INI_GBOF;
 	return;
 }
 
@@ -574,6 +478,7 @@ Error: cannot connect");
 	ctx->st = COIN_ST_CONN;
 
 	/* start the rest api timer */
+	restt_init(ctx);
 	ev_timer_init(ctx->restt, restt_cb, 0.0, TIMEOUT);
 	ctx->restt->data = ctx;
 	ev_timer_start(EV_A_ ctx->restt);
@@ -594,11 +499,10 @@ deinit_coin(EV_P_ coin_ctx_t ctx)
 		ws_close(ctx->ws);
 	}
 	ctx->ws = NULL;
-	/* shutdown the rest api socket */
-	if (ctx->ss != NULL) {
-		close_tls(ctx->ss);
-	}
-	ctx->ss = NULL;
+
+	/* stop curling */
+	ev_timer_stop(EV_A_ ctx->restt);
+	restt_fini(ctx->rs);
 
 	/* set the state to unknown */
 	ctx->st = COIN_ST_UNK;
