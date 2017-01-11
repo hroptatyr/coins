@@ -240,6 +240,17 @@ coinfl_LDFLAGS += $(ws_LIBS)
 coinfl_LDADD = libws.a
 BUILT_SOURCES += coinfl.yucc
 
+bin_PROGRAMS += fast
+fast_SOURCES = fast.c fast.yuck
+fast_SOURCES += version.c version.h
+fast_CPPFLAGS = $(AM_CPPFLAGS)
+fast_CPPFLAGS += $(ev_CFLAGS)
+fast_LDFLAGS = $(AM_LDFLAGS)
+fast_LDFLAGS += $(ev_LIBS)
+fast_LDFLAGS += $(ws_LIBS)
+fast_LDADD = libws.a
+BUILT_SOURCES += fast.yucc
+
 
 CLEANFILES += version.c
 EXTRA_DIST += version.c.in

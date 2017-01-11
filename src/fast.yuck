@@ -1,0 +1,3 @@
+Usage: fast [HOST]
+
+  --config=FILE         Read join lines from FILE, default: fast.cnf
