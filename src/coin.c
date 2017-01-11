@@ -351,7 +351,7 @@ restt_fini(coin_ctx_t ctx)
 static void
 restt_cb(EV_PU_ ev_timer *w, int UNUSED(r))
 {
-	static char url[256U] = \
+	static char url[] = \
 		"GET https://api.gdax.com/products/xxx-yyy/book?level=2";
 	coin_ctx_t ctx = w->data;
 	static size_t isub;
