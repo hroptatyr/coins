@@ -521,6 +521,12 @@ subscr_coin(EV_P_ coin_ctx_t ctx)
 \"data\":{\"channel\":\"live_trades_eurusd\"}\
 }", "{\
 \"event\":\"pusher:subscribe\",\
+\"data\":{\"channel\":\"live_trades_xrpusd\"}\
+}", "{\
+\"event\":\"pusher:subscribe\",\
+\"data\":{\"channel\":\"live_trades_xrpeur\"}\
+}", "{\
+\"event\":\"pusher:subscribe\",\
 \"data\":{\"channel\":\"live_orders\"}\
 }", "{\
 \"event\":\"pusher:subscribe\",\
@@ -528,6 +534,12 @@ subscr_coin(EV_P_ coin_ctx_t ctx)
 }", "{\
 \"event\":\"pusher:subscribe\",\
 \"data\":{\"channel\":\"live_orders_eurusd\"}\
+}", "{\
+\"event\":\"pusher:subscribe\",\
+\"data\":{\"channel\":\"live_orders_xrpusd\"}\
+}", "{\
+\"event\":\"pusher:subscribe\",\
+\"data\":{\"channel\":\"live_orders_xrpeur\"}\
 }", "{\
 \"event\":\"pusher:subscribe\",\
 \"data\":{\"channel\":\"diff_order_book\"}\
@@ -539,6 +551,12 @@ subscr_coin(EV_P_ coin_ctx_t ctx)
 \"data\":{\"channel\":\"diff_order_book_eurusd\"}\
 }", "{\
 \"event\":\"pusher:subscribe\",\
+\"data\":{\"channel\":\"diff_order_book_xrpusd\"}\
+}", "{\
+\"event\":\"pusher:subscribe\",\
+\"data\":{\"channel\":\"diff_order_book_xrpeur\"}\
+}", "{\
+\"event\":\"pusher:subscribe\",\
 \"data\":{\"channel\":\"order_book\"}\
 }", "{\
 \"event\":\"pusher:subscribe\",\
@@ -546,6 +564,12 @@ subscr_coin(EV_P_ coin_ctx_t ctx)
 }", "{\
 \"event\":\"pusher:subscribe\",\
 \"data\":{\"channel\":\"order_book_eurusd\"}\
+}", "{\
+\"event\":\"pusher:subscribe\",\
+\"data\":{\"channel\":\"order_book_xrpusd\"}\
+}", "{\
+\"event\":\"pusher:subscribe\",\
+\"data\":{\"channel\":\"order_book_xrpeur\"}\
 }"
 	};
 
