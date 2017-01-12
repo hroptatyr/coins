@@ -685,7 +685,7 @@ deinit_ev(EV_P_ coin_ctx_t ctx)
 }
 
 
-#include "btsp.yucc"
+#include "trtwss.yucc"
 
 int
 main(int argc, char *argv[])
@@ -730,4 +730,4 @@ main(int argc, char *argv[])
 	return EXIT_SUCCESS;
 }
 
-/* rockws.c ends here */
+/* trtwss.c ends here */
