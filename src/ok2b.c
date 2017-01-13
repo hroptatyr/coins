@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <errno.h>
 #include <time.h>
 #include "fix.h"
@@ -143,7 +144,7 @@ strtons(const char *buf, char **endptr)
 
 
 static int
-route_quote(fix_msg_t msg, const char *prfx, size_t prfz)
+route_quote(fix_msg_t msg, const char *prfx, size_t prfz, bool rstp)
 {
 /* extract bid, ask and instrument and send to mcast channel */
 	static const char tim[] = NUL "52=";
@@ -194,15 +195,24 @@ route_quote(fix_msg_t msg, const char *prfx, size_t prfz)
 		/* no updates? */
 		return -1;
 	}
-	while ((on = xmemmem(on, eom - on, ety, strlenof(ety)))) {
-		static const char *f[] = {"BID2", "ASK2"};
+	if (UNLIKELY(rstp)) {
+		/* indicate reset */
+		static const char clr[] = "clr0\t\t\n";
 		size_t z = len;
 
-		if (UNLIKELY((unsigned char)(*on ^ '0') >= countof(f))) {
+		z += memncpy(buf + z, clr, strlenof(clr));
+		fwrite(buf, 1, z, stdout);
+	}
+	while ((on = xmemmem(on, eom - on, ety, strlenof(ety)))) {
+		static const char *f[] = {"BID2", "ASK2"};
+		unsigned char sd = (unsigned char)(*on++ ^ '0');
+		size_t z = len;
+
+		if (UNLIKELY(sd >= countof(f))) {
 			continue;
 		}
 		/* copy side */
-		z += memncpy(buf + z, f[*on++ ^ '0'], 4U);
+		z += memncpy(buf + z, f[sd], 4U);
 		buf[z++] = '\t';
 		/* on should now be 270=... */
 		if (UNLIKELY(memcmp(on, prc, strlenof(prc)))) {
@@ -232,6 +242,7 @@ procln(char *ln, size_t lz)
 {
 	fix_msg_t msg;
 	size_t prfz;
+	bool rstp = false;
 
 	with (const char *prfx = memchr(ln, '\t', lz)) {
 		prfz = prfx ? prfx + 1U - ln : 0U;
@@ -240,8 +251,9 @@ procln(char *ln, size_t lz)
 
 	switch (UINTIFY_TYP(msg.typ)) {
 	case UINTIFY_TYP("W"):	/* full refresh */
+		rstp = true;
 	case UINTIFY_TYP("X"):	/* inc refresh */
-		route_quote(msg, ln, prfz);
+		route_quote(msg, ln, prfz, rstp);
 		break;
 
 	case UINTIFY_TYP("A"):
