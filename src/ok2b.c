@@ -195,8 +195,14 @@ route_quote(fix_msg_t msg, const char *prfx, size_t prfz, bool rstp)
 		/* no updates? */
 		return -1;
 	}
-	/* first counters */
-	unsigned int frst[] = {0U, 0U};
+	if (UNLIKELY(rstp)) {
+		/* indicate reset */
+		static const char clr[] = "clr0\t\t\n";
+		size_t z = len;
+
+		z += memncpy(buf + z, clr, strlenof(clr));
+		fwrite(buf, 1, z, stdout);
+	}
 	while ((on = xmemmem(on, eom - on, ety, strlenof(ety)))) {
 		static const char *f[] = {"BID2", "ASK2"};
 		unsigned char sd = (unsigned char)(*on++ ^ '0');
@@ -207,7 +213,6 @@ route_quote(fix_msg_t msg, const char *prfx, size_t prfz, bool rstp)
 		}
 		/* copy side */
 		z += memncpy(buf + z, f[sd], 4U);
-		buf[z - (rstp && !frst[sd]++)] = '1';
 		buf[z++] = '\t';
 		/* on should now be 270=... */
 		if (UNLIKELY(memcmp(on, prc, strlenof(prc)))) {
