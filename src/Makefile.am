@@ -263,6 +263,17 @@ ff_LDFLAGS += $(ws_LIBS)
 ff_LDADD = libws.a
 BUILT_SOURCES += ff.yucc
 
+bin_PROGRAMS += kaiko
+kaiko_SOURCES = kaiko.c kaiko.yuck
+kaiko_SOURCES += version.c version.h
+kaiko_CPPFLAGS = $(AM_CPPFLAGS)
+kaiko_CPPFLAGS += $(ev_CFLAGS)
+kaiko_LDFLAGS = $(AM_LDFLAGS)
+kaiko_LDFLAGS += $(ev_LIBS)
+kaiko_LDFLAGS += $(ws_LIBS)
+kaiko_LDADD = libws.a
+BUILT_SOURCES += kaiko.yucc
+
 
 CLEANFILES += version.c
 EXTRA_DIST += version.c.in
