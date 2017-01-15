@@ -187,7 +187,7 @@ bitmex_CPPFLAGS += $(ev_CFLAGS)
 bitmex_LDFLAGS = $(AM_LDFLAGS)
 bitmex_LDFLAGS += $(ev_LIBS)
 bitmex_LDFLAGS += $(ws_LIBS)
-bitmex_LDADD = libws.a
+bitmex_LDADD = libcoins.a libws.a
 BUILT_SOURCES += bitmex.yucc
 
 bin_PROGRAMS += deribit
