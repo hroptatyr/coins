@@ -254,7 +254,7 @@ fast_CPPFLAGS += $(ev_CFLAGS)
 fast_LDFLAGS = $(AM_LDFLAGS)
 fast_LDFLAGS += $(ev_LIBS)
 fast_LDFLAGS += $(ws_LIBS)
-fast_LDADD = libws.a
+fast_LDADD = libcoins.a libws.a
 BUILT_SOURCES += fast.yucc
 
 bin_PROGRAMS += ff
