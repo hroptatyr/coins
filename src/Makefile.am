@@ -22,6 +22,11 @@ libws_a_SOURCES += boobs.h
 libws_a_SOURCES += nifty.h
 ws_LIBS = -lssl -lcrypto
 
+noinst_LIBRARIES += libcoins.a
+libcoins_a_SOURCES =
+libcoins_a_SOURCES += wssnarf.c
+libcoins_a_LIBADD = libws.a
+
 bin_PROGRAMS += coin
 coin_SOURCES = coin.c coin.yuck
 coin_SOURCES += version.c version.h
@@ -271,7 +276,7 @@ kaiko_CPPFLAGS += $(ev_CFLAGS)
 kaiko_LDFLAGS = $(AM_LDFLAGS)
 kaiko_LDFLAGS += $(ev_LIBS)
 kaiko_LDFLAGS += $(ws_LIBS)
-kaiko_LDADD = libws.a
+kaiko_LDADD = libws.a libcoins.a
 BUILT_SOURCES += kaiko.yucc
 
 
