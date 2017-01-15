@@ -110,7 +110,7 @@ btsp_CPPFLAGS += $(ev_CFLAGS)
 btsp_LDFLAGS = $(AM_LDFLAGS)
 btsp_LDFLAGS += $(ev_LIBS)
 btsp_LDFLAGS += $(ws_LIBS)
-btsp_LDADD = libws.a
+btsp_LDADD = libcoins.a libws.a
 BUILT_SOURCES += btsp.yucc
 
 bin_PROGRAMS += btsp2b
