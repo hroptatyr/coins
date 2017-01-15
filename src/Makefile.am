@@ -220,7 +220,7 @@ trtwss_CPPFLAGS += $(ev_CFLAGS)
 trtwss_LDFLAGS = $(AM_LDFLAGS)
 trtwss_LDFLAGS += $(ev_LIBS)
 trtwss_LDFLAGS += $(ws_LIBS)
-trtwss_LDADD = libws.a
+trtwss_LDADD = libcoins.a libws.a
 BUILT_SOURCES += trtwss.yucc
 
 bin_PROGRAMS += gemini

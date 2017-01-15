@@ -166,7 +166,7 @@ loghim(int logfd, const char *buf, size_t len)
 	prfz = hrclock_print(gbuf, INI_GBOF);
 	gbuf[prfz++] = '\t';
 
-	memnmove(gbuf + prfz, buf, len);
+	memmove(gbuf + prfz, buf, len);
 	gbuf[prfz + len++] = '\n';
 	write(logfd, gbuf, prfz + len);
 	fwrite(gbuf, 1, prfz + len, stderr);
@@ -186,8 +186,10 @@ logwss(int logfd, const char *buf, size_t len)
 	for (const char *eol, *const ep = buf + len;
 	     lp < ep && (eol = memchr(lp, '\n', ep - lp));
 	     lp = eol + 1U) {
-		memmove(gbuf + prfz, lp, eol - lp);
-		gbuf[prfz + (eol - lp)] = '\n';
+		size_t z;
+		z = memnmove(gbuf + prfz, lp, eol - lp);
+		gbuf[prfz + z++] = '\n';
+		z = massage(gbuf + prfz, z);
 		write(logfd, gbuf, prfz + (eol - lp) + 1U);
 		fwrite(gbuf, 1, prfz + (eol - lp) + 1U, stderr);
 	}
@@ -392,6 +394,12 @@ __attribute__((weak)) int
 heartbeat(ws_t UNUSED(ws))
 {
 	return 0;
+}
+
+__attribute__((weak)) size_t
+massage(char *restrict UNUSED(buf), size_t bsz)
+{
+	return bsz;
 }
 
 

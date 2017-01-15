@@ -1,5 +1,6 @@
 #if !defined INCLUDED_wssnarf_h_
 #define INCLUDED_wssnarf_h_
+#include <stdlib.h>
 #include "ws.h"
 
 #define TIMEOUT		6.0
@@ -30,5 +31,7 @@ extern int join_coin(ws_t);
 
 /* will be called every TIMEOUT seconds */
 extern int heartbeat(ws_t);
+
+extern size_t massage(char *restrict buf, size_t bsz);
 
 #endif	/* INCLUDED_wssnarf_h_ */
