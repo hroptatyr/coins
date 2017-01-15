@@ -2,6 +2,8 @@
 #define INCLUDED_wssnarf_h_
 #include "ws.h"
 
+#define TIMEOUT		6.0
+
 typedef struct wssnarf_s *wssnarf_t;
 
 typedef struct {
@@ -20,9 +22,13 @@ extern int run_wssnarf(wssnarf_t);
  * if 0 auth must wait for a response
  * if 1 auth was successful */
 extern int auth_coin(ws_t);
+
 /* if <0 join should be considered unsuccessful,
  * if 0 join must wait for a response
  * if 1 join was successful */
 extern int join_coin(ws_t);
+
+/* will be called every TIMEOUT seconds */
+extern int heartbeat(ws_t);
 
 #endif	/* INCLUDED_wssnarf_h_ */

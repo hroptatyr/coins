@@ -73,7 +73,7 @@ cexwss_CPPFLAGS += $(ev_CFLAGS)
 cexwss_LDFLAGS = $(AM_LDFLAGS)
 cexwss_LDFLAGS += $(ev_LIBS)
 cexwss_LDFLAGS += $(ws_LIBS)
-cexwss_LDADD = libws.a
+cexwss_LDADD = libcoins.a libws.a
 BUILT_SOURCES += cexwss.yucc
 
 bin_PROGRAMS += cex2b

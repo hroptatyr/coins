@@ -20,7 +20,6 @@
 #include "wssnarf.h"
 #include "nifty.h"
 
-#define TIMEOUT		6.0
 #define NTIMEOUTS	10
 #define ONE_DAY		86400.0
 #define MIDNIGHT	0.0
@@ -263,8 +262,7 @@ ws_cb(EV_P_ ev_io *w, int UNUSED(revents))
 	case COIN_ST_CONN:
 		ctx->st = COIN_ST_CONND;
 	case COIN_ST_CONND:
-		gbof = INI_GBOF;
-		break;
+		goto log;
 
 	case COIN_ST_AUTH:
 		/* we've got a cb whilst authing, consider ourselves authd */
@@ -321,6 +319,9 @@ hbeat_cb(EV_PU_ ev_timer *w, int UNUSED(revents))
 	wssnarf_t ctx = w->data;
 
 	loghim(ctx->logfd, "HEARTBEAT", 9U);
+	if (UNLIKELY(heartbeat(ctx->ws) < 0)) {
+		ctx->st = COIN_ST_NODATA;
+	}
 	return;
 }
 
@@ -385,6 +386,12 @@ join_coin(ws_t UNUSED(ws))
 {
 	fputs("TRIVIAL JOIN\n", stderr);
 	return 1;
+}
+
+__attribute__((weak)) int
+heartbeat(ws_t UNUSED(ws))
+{
+	return 0;
 }
 
 
