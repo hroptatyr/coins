@@ -22,6 +22,11 @@ libws_a_SOURCES += boobs.h
 libws_a_SOURCES += nifty.h
 ws_LIBS = -lssl -lcrypto
 
+noinst_LIBRARIES += libcoins.a
+libcoins_a_SOURCES =
+libcoins_a_SOURCES += wssnarf.c
+libcoins_a_LIBADD = libws.a
+
 bin_PROGRAMS += coin
 coin_SOURCES = coin.c coin.yuck
 coin_SOURCES += version.c version.h
@@ -49,7 +54,7 @@ hitwss_CPPFLAGS += $(ev_CFLAGS)
 hitwss_LDFLAGS = $(AM_LDFLAGS)
 hitwss_LDFLAGS += $(ev_LIBS)
 hitwss_LDFLAGS += $(ws_LIBS)
-hitwss_LDADD = libws.a
+hitwss_LDADD = libcoins.a libws.a
 BUILT_SOURCES += hitwss.yucc
 
 bin_PROGRAMS += hit2b
@@ -68,7 +73,7 @@ cexwss_CPPFLAGS += $(ev_CFLAGS)
 cexwss_LDFLAGS = $(AM_LDFLAGS)
 cexwss_LDFLAGS += $(ev_LIBS)
 cexwss_LDFLAGS += $(ws_LIBS)
-cexwss_LDADD = libws.a
+cexwss_LDADD = libcoins.a libws.a
 BUILT_SOURCES += cexwss.yucc
 
 bin_PROGRAMS += cex2b
@@ -105,7 +110,7 @@ btsp_CPPFLAGS += $(ev_CFLAGS)
 btsp_LDFLAGS = $(AM_LDFLAGS)
 btsp_LDFLAGS += $(ev_LIBS)
 btsp_LDFLAGS += $(ws_LIBS)
-btsp_LDADD = libws.a
+btsp_LDADD = libcoins.a libws.a
 BUILT_SOURCES += btsp.yucc
 
 bin_PROGRAMS += btsp2b
@@ -123,7 +128,7 @@ bitfin_CPPFLAGS += $(ev_CFLAGS)
 bitfin_LDFLAGS = $(AM_LDFLAGS)
 bitfin_LDFLAGS += $(ev_LIBS)
 bitfin_LDFLAGS += $(ws_LIBS)
-bitfin_LDADD = libws.a
+bitfin_LDADD = libcoins.a libws.a
 BUILT_SOURCES += bitfin.yucc
 
 bin_PROGRAMS += bitfin2b
@@ -182,7 +187,7 @@ bitmex_CPPFLAGS += $(ev_CFLAGS)
 bitmex_LDFLAGS = $(AM_LDFLAGS)
 bitmex_LDFLAGS += $(ev_LIBS)
 bitmex_LDFLAGS += $(ws_LIBS)
-bitmex_LDADD = libws.a
+bitmex_LDADD = libcoins.a libws.a
 BUILT_SOURCES += bitmex.yucc
 
 bin_PROGRAMS += deribit
@@ -193,7 +198,7 @@ deribit_CPPFLAGS += $(ev_CFLAGS)
 deribit_LDFLAGS = $(AM_LDFLAGS)
 deribit_LDFLAGS += $(ev_LIBS)
 deribit_LDFLAGS += $(ws_LIBS)
-deribit_LDADD = libws.a
+deribit_LDADD = libcoins.a libws.a
 BUILT_SOURCES += deribit.yucc
 
 bin_PROGRAMS += derifix
@@ -215,7 +220,7 @@ trtwss_CPPFLAGS += $(ev_CFLAGS)
 trtwss_LDFLAGS = $(AM_LDFLAGS)
 trtwss_LDFLAGS += $(ev_LIBS)
 trtwss_LDFLAGS += $(ws_LIBS)
-trtwss_LDADD = libws.a
+trtwss_LDADD = libcoins.a libws.a
 BUILT_SOURCES += trtwss.yucc
 
 bin_PROGRAMS += gemini
@@ -226,7 +231,7 @@ gemini_CPPFLAGS += $(ev_CFLAGS)
 gemini_LDFLAGS = $(AM_LDFLAGS)
 gemini_LDFLAGS += $(ev_LIBS)
 gemini_LDFLAGS += $(ws_LIBS)
-gemini_LDADD = libws.a
+gemini_LDADD = libcoins.a libws.a
 BUILT_SOURCES += gemini.yucc
 
 bin_PROGRAMS += coinfl
@@ -238,7 +243,7 @@ coinfl_CPPFLAGS += $(ev_CFLAGS)
 coinfl_LDFLAGS = $(AM_LDFLAGS)
 coinfl_LDFLAGS += $(ev_LIBS)
 coinfl_LDFLAGS += $(ws_LIBS)
-coinfl_LDADD = libws.a
+coinfl_LDADD = libcoins.a libws.a
 BUILT_SOURCES += coinfl.yucc
 
 bin_PROGRAMS += fast
@@ -249,7 +254,7 @@ fast_CPPFLAGS += $(ev_CFLAGS)
 fast_LDFLAGS = $(AM_LDFLAGS)
 fast_LDFLAGS += $(ev_LIBS)
 fast_LDFLAGS += $(ws_LIBS)
-fast_LDADD = libws.a
+fast_LDADD = libcoins.a libws.a
 BUILT_SOURCES += fast.yucc
 
 bin_PROGRAMS += ff
@@ -260,7 +265,7 @@ ff_CPPFLAGS += $(ev_CFLAGS)
 ff_LDFLAGS = $(AM_LDFLAGS)
 ff_LDFLAGS += $(ev_LIBS)
 ff_LDFLAGS += $(ws_LIBS)
-ff_LDADD = libws.a
+ff_LDADD = libcoins.a libws.a
 BUILT_SOURCES += ff.yucc
 
 bin_PROGRAMS += kaiko
@@ -271,7 +276,7 @@ kaiko_CPPFLAGS += $(ev_CFLAGS)
 kaiko_LDFLAGS = $(AM_LDFLAGS)
 kaiko_LDFLAGS += $(ev_LIBS)
 kaiko_LDFLAGS += $(ws_LIBS)
-kaiko_LDADD = libws.a
+kaiko_LDADD = libws.a libcoins.a
 BUILT_SOURCES += kaiko.yucc
 
 
