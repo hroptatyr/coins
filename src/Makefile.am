@@ -198,7 +198,7 @@ deribit_CPPFLAGS += $(ev_CFLAGS)
 deribit_LDFLAGS = $(AM_LDFLAGS)
 deribit_LDFLAGS += $(ev_LIBS)
 deribit_LDFLAGS += $(ws_LIBS)
-deribit_LDADD = libws.a
+deribit_LDADD = libcoins.a libws.a
 BUILT_SOURCES += deribit.yucc
 
 bin_PROGRAMS += derifix
