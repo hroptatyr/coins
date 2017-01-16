@@ -265,7 +265,7 @@ ff_CPPFLAGS += $(ev_CFLAGS)
 ff_LDFLAGS = $(AM_LDFLAGS)
 ff_LDFLAGS += $(ev_LIBS)
 ff_LDFLAGS += $(ws_LIBS)
-ff_LDADD = libws.a
+ff_LDADD = libcoins.a libws.a
 BUILT_SOURCES += ff.yucc
 
 bin_PROGRAMS += kaiko
