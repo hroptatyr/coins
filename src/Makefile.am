@@ -231,7 +231,7 @@ gemini_CPPFLAGS += $(ev_CFLAGS)
 gemini_LDFLAGS = $(AM_LDFLAGS)
 gemini_LDFLAGS += $(ev_LIBS)
 gemini_LDFLAGS += $(ws_LIBS)
-gemini_LDADD = libws.a
+gemini_LDADD = libcoins.a libws.a
 BUILT_SOURCES += gemini.yucc
 
 bin_PROGRAMS += coinfl
