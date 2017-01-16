@@ -279,6 +279,17 @@ kaiko_LDFLAGS += $(ws_LIBS)
 kaiko_LDADD = libws.a libcoins.a
 BUILT_SOURCES += kaiko.yucc
 
+bin_PROGRAMS += bitso
+bitso_SOURCES = bitso.c bitso.yuck
+bitso_SOURCES += version.c version.h
+bitso_CPPFLAGS = $(AM_CPPFLAGS)
+bitso_CPPFLAGS += $(ev_CFLAGS)
+bitso_LDFLAGS = $(AM_LDFLAGS)
+bitso_LDFLAGS += $(ev_LIBS)
+bitso_LDFLAGS += $(ws_LIBS)
+bitso_LDADD = libws.a libcoins.a
+BUILT_SOURCES += bitso.yucc
+
 
 CLEANFILES += version.c
 EXTRA_DIST += version.c.in
