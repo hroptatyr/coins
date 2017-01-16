@@ -243,7 +243,7 @@ coinfl_CPPFLAGS += $(ev_CFLAGS)
 coinfl_LDFLAGS = $(AM_LDFLAGS)
 coinfl_LDFLAGS += $(ev_LIBS)
 coinfl_LDFLAGS += $(ws_LIBS)
-coinfl_LDADD = libws.a
+coinfl_LDADD = libcoins.a libws.a
 BUILT_SOURCES += coinfl.yucc
 
 bin_PROGRAMS += fast

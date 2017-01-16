@@ -258,25 +258,48 @@ ws_cb(EV_P_ ev_io *w, int UNUSED(revents))
 	fprintf(stderr, "WS (%u) read %zu+%zi/%zu bytes\n", ctx->st, gbof, nrd, maxr);
 #endif	/* 1 */
 
+	/* advance gbof */
+	gbof += nrd;
 	switch (ctx->st) {
 		ssize_t npr;
+		int r;
 
+	case COIN_ST_UNK:
+		ctx->st = COIN_ST_CONN;
 	case COIN_ST_CONN:
-		ctx->st = COIN_ST_CONND;
+		/* we've got a cb whilst authing,
+		 * see what the authd predicate has to say */
+		if ((r = connd_coin(gbuf + INI_GBOF, gbof - INI_GBOF)) < 0) {
+			/* complete failue */
+			goto logunr;
+		}
+		/* see if we can upgrade the connection */
+		ctx->st += (coin_st_t)(r > 0);
 	case COIN_ST_CONND:
 		goto log;
 
 	case COIN_ST_AUTH:
-		/* we've got a cb whilst authing, consider ourselves authd */
-		ctx->st = COIN_ST_AUTHD;
+		/* we've got a cb whilst authing,
+		 * see what the authd predicate has to say */
+		if ((r = authd_coin(gbuf + INI_GBOF, gbof - INI_GBOF)) < 0) {
+			/* complete failue */
+			goto logunr;
+		}
+		/* see if we can upgrade the connection */
+		ctx->st += (coin_st_t)(r > 0);
 	case COIN_ST_AUTHD:
 		goto log;
 
 	case COIN_ST_JOIN:
-		ctx->st = COIN_ST_JOIND;
+		/* see what they say about the joinedness */
+		if ((r = joind_coin(gbuf + INI_GBOF, gbof - INI_GBOF)) < 0) {
+			/* complete failue */
+			goto logunr;
+		}
+		/* see if we can upgrade the connection */
+		ctx->st += (coin_st_t)(r > 0);
 	case COIN_ST_JOIND:
 	log:
-		gbof += nrd;
 		/* log him */
 		npr = logwss(ctx->logfd, gbuf + INI_GBOF, gbof - INI_GBOF);
 		memnmove(gbuf + INI_GBOF, gbuf + INI_GBOF + npr, gbof - npr);
@@ -292,10 +315,13 @@ ws_cb(EV_P_ ev_io *w, int UNUSED(revents))
 	}
 	return;
 
+logunr:
+	logwss(ctx->logfd, gbuf + INI_GBOF, gbof + nrd - INI_GBOF);
 unroll:
 	/* connection reset */
 	loghim(ctx->logfd, "restart", 7);
 	ev_break(EV_A_ EVBREAK_ALL);
+	gbof = INI_GBOF;
 	return;
 }
 
@@ -339,7 +365,7 @@ sigint_cb(EV_PU_ ev_signal *w, int UNUSED(revents))
 
 
 static int
-conn_coin(EV_P_ wssnarf_t ctx)
+open_coin(EV_P_ wssnarf_t ctx)
 {
 /* this init process is two part: request a token, then do the subscriptions */
 	gbof = INI_GBOF;
@@ -355,7 +381,7 @@ conn_coin(EV_P_ wssnarf_t ctx)
 	ev_io_init(ctx->watcher, ws_cb, ws_fd(ctx->ws), EV_READ);
 	ev_io_start(EV_A_ ctx->watcher);
 	ctx->watcher->data = ctx;
-	return 0;
+	return 1;
 }
 
 static int
@@ -374,6 +400,13 @@ fini_coin(EV_P_ wssnarf_t ctx)
 	/* set the state to unknown */
 	gbof = INI_GBOF;
 	return 0;
+}
+
+__attribute__((weak)) int
+conn_coin(ws_t UNUSED(ws))
+{
+	fputs("TRIVIAL CONN\n", stderr);
+	return 1;
 }
 
 __attribute__((weak)) int
@@ -402,6 +435,24 @@ massage(char *restrict UNUSED(buf), size_t bsz)
 	return bsz;
 }
 
+__attribute__((weak)) int
+connd_coin(const char *UNUSED(rsp), size_t UNUSED(rsz))
+{
+	return 1;
+}
+
+__attribute__((weak)) int
+authd_coin(const char *UNUSED(rsp), size_t UNUSED(rsz))
+{
+	return 1;
+}
+
+__attribute__((weak)) int
+joind_coin(const char *UNUSED(rsp), size_t UNUSED(rsz))
+{
+	return 1;
+}
+
 
 /* only cb's we allow here */
 static void
@@ -414,14 +465,22 @@ prepare(EV_P_ ev_prepare *w, int UNUSED(revents))
 		int r;
 
 	case COIN_ST_UNK:
-
+		if ((r = open_coin(EV_A_ ctx)) < 0) {
+			goto disc;
+		}
+		/* reset gbof and go for it */
+		gbof = INI_GBOF;
+		ctx->st = COIN_ST_CONN;
 	case COIN_ST_CONN:
 		/* initialise everything, sets the state */
-		if ((r = conn_coin(EV_A_ ctx) < 0)) {
+		if ((r = conn_coin(ctx->ws)) < 0) {
+			goto disc;
+		} else if (r == 0) {
+			/* we need to wait */
 			break;
 		}
-		ctx->st = COIN_ST_CONND;
-
+		/* otherwise fast propagation */
+		;
 	case COIN_ST_CONND:
 		/* reset nothing counter and start the nothing timer */
 		gbof = INI_GBOF;
@@ -434,12 +493,13 @@ prepare(EV_P_ ev_prepare *w, int UNUSED(revents))
 			ctx->st = COIN_ST_CONND;
 			break;
 		} else if (r == 0) {
+			/* we need to wait */
 			break;
 		}
-		/* otherwise we're good to go */
-		ctx->st = COIN_ST_AUTHD;
-
+		/* otherwise fast propagation */
+		;
 	case COIN_ST_AUTHD:
+		gbof = INI_GBOF;
 		ctx->st = COIN_ST_JOIN;
 
 	case COIN_ST_JOIN:
@@ -462,6 +522,7 @@ prepare(EV_P_ ev_prepare *w, int UNUSED(revents))
 		/* fallthrough */
 	case COIN_ST_NODATA:
 	case COIN_ST_INTR:
+	disc:
 		/* disconnect and unroll */
 		fini_coin(EV_A_ ctx);
 		ctx->st = COIN_ST_FINI;
