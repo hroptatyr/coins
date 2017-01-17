@@ -10,6 +10,7 @@ typedef struct wssnarf_s *wssnarf_t;
 typedef struct {
 	const char *url;
 	const char *ofn;
+	double max_inact;
 } wssnarf_param_t;
 
 
