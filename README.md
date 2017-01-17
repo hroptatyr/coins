@@ -26,6 +26,7 @@ The following exchanges are supported:
 - coinfloor
 - fastmatch
 - bitso
+- huobi
 
 The following data providers are supported:
 - kaiko

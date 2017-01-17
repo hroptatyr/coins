@@ -163,13 +163,13 @@ loghim(int logfd, const char *buf, size_t len)
 	size_t prfz;
 
 	/* this is a prefix that we prepend to each line */
-	prfz = hrclock_print(gbuf, INI_GBOF);
-	gbuf[prfz++] = '\t';
+	prfz = hrclock_print(gbuf + gbof, INI_GBOF);
+	gbuf[gbof + prfz++] = '\t';
 
-	memmove(gbuf + prfz, buf, len);
-	gbuf[prfz + len++] = '\n';
-	write(logfd, gbuf, prfz + len);
-	fwrite(gbuf, 1, prfz + len, stderr);
+	memmove(gbuf + gbof + prfz, buf, len);
+	gbuf[gbof + prfz + len++] = '\n';
+	write(logfd, gbuf + gbof, prfz + len);
+	fwrite(gbuf + gbof, 1, prfz + len, stderr);
 	return 0;
 }
 
@@ -516,7 +516,7 @@ prepare(EV_P_ ev_prepare *w, int UNUSED(revents))
 
 	case COIN_ST_JOIND:
 		/* check if there's messages from the channel */
-		if (tsp->tv_sec - ctx->last_act->tv_sec < MAX_INACT) {
+		if (tsp->tv_sec - ctx->last_act->tv_sec < ctx->p.max_inact) {
 			break;
 		}
 		/* fallthrough */
@@ -587,6 +587,10 @@ make_wssnarf(wssnarf_param_t prm)
 
 	r->p = prm;
 	init_ev(EV_A_ r);
+
+	if (r->p.max_inact <= 0) {
+		r->p.max_inact = 1e48;
+	}
 
 	/* make sure we've got something to write to */
 	open_outfile(r);

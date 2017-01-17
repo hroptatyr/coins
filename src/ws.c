@@ -478,19 +478,31 @@ ws_recv(ws_t ws, void *restrict buv, size_t bsz, int flags)
 	 * - multiple ws frames in one go */
 
 	if (UNLIKELY(ws->togo)) {
-		if (nrd <= ws->togo) {
+		if (nrd < ws->togo) {
 			ws->togo -= nrd;
 			return nrd;
 		}
 		/* otherwise there's the rest of the old packet
 		 * and new packets afterwards */
-		pp = ws->togo;
+		rp = pp = ws->togo;
 		ws->togo = 0U;
+		/* finalise */
+		if (pp >= (size_t)nrd) {
+			/* no need, finalise */
+			buf[pp++] = '\n';
+			return pp;
+		}
+		/* otherwise copy over the ws frame so we can insert the
+		 * newline as indicator of a finished frame */
+		memcpy(&fr, buf + pp, sizeof(fr));
+		buf[rp++] = '\n';
+		goto unpkd;
 	}
 
 again:
 	/* unpack him */
 	memcpy(&fr, buf + pp, sizeof(fr));
+unpkd:
 	switch (fr.plen) {
 	case 126U:
 		pz = be16toh(fr.plen16);
