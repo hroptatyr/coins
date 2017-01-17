@@ -163,13 +163,13 @@ loghim(int logfd, const char *buf, size_t len)
 	size_t prfz;
 
 	/* this is a prefix that we prepend to each line */
-	prfz = hrclock_print(gbuf, INI_GBOF);
-	gbuf[prfz++] = '\t';
+	prfz = hrclock_print(gbuf + gbof, INI_GBOF);
+	gbuf[gbof + prfz++] = '\t';
 
-	memmove(gbuf + prfz, buf, len);
-	gbuf[prfz + len++] = '\n';
-	write(logfd, gbuf, prfz + len);
-	fwrite(gbuf, 1, prfz + len, stderr);
+	memmove(gbuf + gbof + prfz, buf, len);
+	gbuf[gbof + prfz + len++] = '\n';
+	write(logfd, gbuf + gbof, prfz + len);
+	fwrite(gbuf + gbof, 1, prfz + len, stderr);
 	return 0;
 }
 
