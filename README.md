@@ -25,6 +25,7 @@ The following exchanges are supported:
 - deribit
 - coinfloor
 - fastmatch
+- bitso
 
 The following data providers are supported:
 - kaiko
