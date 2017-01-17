@@ -290,6 +290,18 @@ bitso_LDFLAGS += $(ws_LIBS)
 bitso_LDADD = libws.a libcoins.a
 BUILT_SOURCES += bitso.yucc
 
+bin_PROGRAMS += huobi
+huobi_SOURCES = huobi.c huobi.yuck
+huobi_SOURCES += version.c version.h
+huobi_CPPFLAGS = $(AM_CPPFLAGS)
+huobi_CPPFLAGS += $(ev_CFLAGS)
+huobi_LDFLAGS = $(AM_LDFLAGS)
+huobi_LDFLAGS += $(ev_LIBS)
+huobi_LDFLAGS += $(ws_LIBS)
+huobi_LDFLAGS += -lcurl
+huobi_LDADD = libws.a libcoins.a
+BUILT_SOURCES += huobi.yucc
+
 
 CLEANFILES += version.c
 EXTRA_DIST += version.c.in
