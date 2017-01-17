@@ -478,7 +478,7 @@ ws_recv(ws_t ws, void *restrict buv, size_t bsz, int flags)
 	 * - multiple ws frames in one go */
 
 	if (UNLIKELY(ws->togo)) {
-		if (nrd <= ws->togo) {
+		if (nrd < ws->togo) {
 			ws->togo -= nrd;
 			return nrd;
 		}
@@ -486,6 +486,11 @@ ws_recv(ws_t ws, void *restrict buv, size_t bsz, int flags)
 		 * and new packets afterwards */
 		pp = ws->togo;
 		ws->togo = 0U;
+		if (pp >= (size_t)nrd) {
+			/* no need, finalise */
+			buf[pp++] = '\n';
+			return pp;
+		}
 	}
 
 again:
