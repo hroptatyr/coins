@@ -44,6 +44,10 @@ join_coin(ws_t ws)
 	{\"symbolId\":\"btccny\",\"pushType\":\"websocket\"},\
 	{\"symbolId\":\"ltccny\",\"pushType\":\"websocket\"},\
 	{\"symbolId\":\"btcusd\",\"pushType\":\"websocket\"}\
+], \"tradeDetail\":[\
+	{\"symbolId\":\"btccny\",\"pushType\":\"websocket\"},\
+	{\"symbolId\":\"ltccny\",\"pushType\":\"websocket\"},\
+	{\"symbolId\":\"btcusd\",\"pushType\":\"websocket\"}\
 ]\
 },\"version\":1,\"msgType\":\"reqMsgSubscribe\"\
 }]}";
