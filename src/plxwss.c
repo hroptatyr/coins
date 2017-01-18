@@ -25,7 +25,7 @@ static const char logfile[] = "prices";
 static char hostname[256];
 static size_t hostnsz;
 
-#define API_URL		"wss://api.poloniex.com/"
+#define API_URL		"wamps://api.poloniex.com/"
 #define REST_URL	"https://poloniex.com/public?command=returnOrderBook&currencyPair=all"
 #define REST_PORT	443
 
@@ -489,7 +489,7 @@ init_coin(EV_P_ coin_ctx_t ctx)
 
 	fprintf(stderr, "INIT\n");
 	ev_timer_again(EV_A_ ctx->timer);
-	if ((ctx->ws = wamp_open(API_URL)) == NULL) {
+	if ((ctx->ws = ws_open(API_URL)) == NULL) {
 			serror("\
 Error: cannot connect");
 		/* retry soon, we just use the watcher for this */

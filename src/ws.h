@@ -5,9 +5,14 @@
 
 typedef struct ws_s *ws_t;
 
+typedef enum {
+	WS_PROTO_RAW,
+	WS_PROTO_WAMP,
+	WS_PROTO_REST,
+} ws_proto_t;
+
 
 extern ws_t ws_open(const char *url);
-extern ws_t wamp_open(const char *url);
 extern int ws_close(ws_t);
 
 extern ssize_t ws_recv(ws_t, void *restrict buf, size_t bsz, int flags);
@@ -27,6 +32,16 @@ ws_fd(ws_t ws)
 		int sock;
 	} *_s = (void*)ws;
 	return _s->sock;
+}
+
+static inline ws_proto_t
+ws_proto(ws_t ws)
+{
+	struct {
+		ws_proto_t proto;
+		int sock;
+	} *_s = (void*)ws;
+	return _s->proto;
 }
 
 #endif	/* !INCLUDED_ws_h_ */
