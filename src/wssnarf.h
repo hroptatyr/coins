@@ -9,6 +9,7 @@ typedef struct wssnarf_s *wssnarf_t;
 
 typedef struct {
 	const char *url;
+	double heartbeat;
 	double max_inact;
 } wssnarf_param_t;
 

@@ -20,17 +20,8 @@
 #include "wssnarf.h"
 #include "nifty.h"
 
-#define NTIMEOUTS	10
 #define ONE_DAY		86400.0
 #define MIDNIGHT	0.0
-#define ONE_WEEK	604800.0
-#define SATURDAY	172800.0
-#define SUNDAY		302400.0
-
-/* number of seconds we tolerate inactivity in the beef channels */
-#define MAX_INACT	(30)
-
-#define strlenof(x)	(sizeof(x) - 1U)
 
 #if defined __INTEL_COMPILER
 # pragma warning (disable:2259)
@@ -704,10 +695,12 @@ add_wssnarf(wssnarf_t ctx, wssnarf_param_t prm)
 		ctx->p[ctx->ns].max_inact = 1e48;
 	}
 
-	/* inc nothing counter every 3 seconds */
-	ev_timer_init(&ctx->timer[ctx->ns], hbeat_cb, 0.0, TIMEOUT);
-	ev_timer_start(EV_A_ &ctx->timer[ctx->ns]);
-	ctx->timer[ctx->ns].data = ctx;
+	/* initialise heartbeat */
+	if (LIKELY(prm.heartbeat > 0)) {
+		ev_timer_init(&ctx->timer[ctx->ns], hbeat_cb, 0.0, prm.heartbeat);
+		ev_timer_start(EV_A_ &ctx->timer[ctx->ns]);
+		ctx->timer[ctx->ns].data = ctx;
+	}
 	ctx->ns++;
 	return 0;
 }
