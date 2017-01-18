@@ -36,7 +36,7 @@ coin_LDFLAGS = $(AM_LDFLAGS)
 coin_LDFLAGS += $(ev_LIBS)
 coin_LDFLAGS += $(ws_LIBS)
 coin_LDFLAGS += -lcurl
-coin_LDADD = libws.a
+coin_LDADD = libcoins.a libws.a
 BUILT_SOURCES += coin.yucc
 
 bin_PROGRAMS += coin2b
