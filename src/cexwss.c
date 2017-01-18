@@ -147,7 +147,7 @@ Error: specify pairs like CCY:CCY", stderr);
 	nsubs = argi->nargs;
 
 	/* obtain a loop */
-	wss = make_wssnarf((wssnarf_param_t){API_URL, "prices"});
+	wss = make_wssnarf((wssnarf_param_t){API_URL, "prices", 30.0});
 
 	/* run the loop */
 	run_wssnarf(wss);
