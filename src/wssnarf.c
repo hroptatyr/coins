@@ -579,7 +579,9 @@ more:
 
 	case COIN_ST_JOIND:
 		/* check if there's messages from the channel */
-		if (tsp->tv_sec - ctx->last_act[idx].tv_sec <
+		if (ws_proto(ctx->ws[idx]) == WS_PROTO_REST) {
+			break;
+		} else if (tsp->tv_sec - ctx->last_act[idx].tv_sec <
 		    ctx->p[idx].max_inact) {
 			break;
 		}
