@@ -9,16 +9,18 @@ typedef struct wssnarf_s *wssnarf_t;
 
 typedef struct {
 	const char *url;
-	const char *ofn;
 	double max_inact;
 } wssnarf_param_t;
 
 
-extern wssnarf_t make_wssnarf(wssnarf_param_t);
+extern wssnarf_t make_wssnarf(const char *logfile);
 extern void free_wssnarf(wssnarf_t);
 extern int run_wssnarf(wssnarf_t);
 
 extern int wssnarf_log(wssnarf_t, const char *msg, size_t msz);
+
+/* to add another socket */
+extern int add_wssnarf(wssnarf_t, wssnarf_param_t);
 
 
 /* to be implemented by clients */
