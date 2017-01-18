@@ -692,10 +692,10 @@ add_wssnarf(wssnarf_t ctx, wssnarf_param_t prm)
 {
 	EV_P = ev_default_loop(0);
 
-	ctx->p[ctx->ns] = prm;
-	if (ctx->p[ctx->ns].max_inact <= 0) {
-		ctx->p[ctx->ns].max_inact = 1e48;
+	if (prm.max_inact <= 0) {
+		prm.max_inact = 1e48;
 	}
+	ctx->p[ctx->ns] = prm;
 
 	/* initialise heartbeat */
 	if (LIKELY(prm.heartbeat > 0)) {
