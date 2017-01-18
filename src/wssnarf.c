@@ -331,6 +331,7 @@ rest_cb(EV_P_ ev_io *w, int UNUSED(revents))
 			ws_close(ctx->ws);
 		}
 		ctx->ws = NULL;
+		ctx->st = COIN_ST_UNK;
 	}
 
 #if 1
