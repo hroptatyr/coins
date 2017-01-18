@@ -41,13 +41,6 @@ serror(const char *fmt, ...)
 	return;
 }
 
-static inline size_t
-memncpy(void *restrict tgt, const void *src, size_t zrc)
-{
-	memcpy(tgt, src, zrc);
-	return zrc;
-}
-
 static char*
 xmemmem(const char *hay, const size_t hayz, const char *ndl, const size_t ndlz)
 {
@@ -336,7 +329,8 @@ Error: specify pairs like CCY:CCY, with CCY out of XBT, EUR, GBP, USD, PLN");
 	nsubs = argi->nargs;
 
 	/* obtain a loop */
-	wss = make_wssnarf((wssnarf_param_t){API_URL, "prices"});
+	wss = make_wssnarf("prices");
+	add_wssnarf(wss, (wssnarf_param_t){API_URL, 6.0, 30.0});
 
 	/* run the loop */
 	run_wssnarf(wss);

@@ -32,32 +32,26 @@ typedef struct  __attribute__((packed)) {
 _Static_assert(sizeof(wsfr_t) == 14, "wsfr_t is improperly packed");
 
 struct ws_s {
-	unsigned int state;
+	/* protocol */
+	ws_proto_t p;
 	int s;
 	ssl_ctx_t c;
 	/* size to go */
 	ssize_t togo;
-	/* frame leftovers */
-	wsfr_t frml;
+	unsigned int state;
+	union {
+		/* frame leftovers */
+		wsfr_t frml;
+		struct {
+			const char *host;
+			size_t hstz;
+		};
+	};
 };
 
 
 static char *gbuf;
 static size_t gbsz;
-
-static inline size_t
-memncpy(void *restrict buf, const void *src, size_t zrc)
-{
-	memcpy(buf, src, zrc);
-	return zrc;
-}
-
-static inline size_t
-memnmove(void *tgt, const void *src, size_t zrc)
-{
-	memmove(tgt, src, zrc);
-	return zrc;
-}
 
 static char*
 xmemmem(const char *hay, const size_t hayz, const char *ndl, const size_t ndlz)
@@ -177,11 +171,21 @@ nil:
 static ssize_t
 _init(ws_t ws, const char *host, const char *rsrc, size_t rlen)
 {
-	static const char greq[] = "\
+	static const char ws_req[] = "\
 Sec-WebSocket-Version: 13\r\n\
 Sec-WebSocket-Key: e8w+o5wQsV0rXFezPUS8XQ==\r\n\
 Upgrade: websocket\r\n\
 Connection: Upgrade\r\n\
+\r\n";
+	static const char wamp_req[] = "\
+Sec-WebSocket-Version: 13\r\n\
+Sec-WebSocket-Key: e8w+o5wQsV0rXFezPUS8XQ==\r\n\
+Sec-WebSocket-Protocol: wamp.2.json\r\n\
+Upgrade: websocket\r\n\
+Connection: Upgrade\r\n\
+\r\n";
+	static const char rest_req[] = "\
+User-Agent: Mozilla/4.0\r\n\
 \r\n";
 	size_t nrq = 0U;
 	ssize_t nrd;
@@ -193,7 +197,21 @@ Connection: Upgrade\r\n\
 	nrq += memncpy(gbuf + nrq, host, strlen(host));
 	gbuf[nrq++] = '\r';
 	gbuf[nrq++] = '\n';
-	nrq += memncpy(gbuf + nrq, greq, strlenof(greq));
+
+	switch (ws->p) {
+	case WS_PROTO_RAW:
+		nrq += memncpy(gbuf + nrq, ws_req, strlenof(ws_req));
+		break;
+	case WS_PROTO_WAMP:
+		nrq += memncpy(gbuf + nrq, wamp_req, strlenof(wamp_req));
+		break;
+	case WS_PROTO_REST:
+		nrq += memncpy(gbuf + nrq, rest_req, strlenof(rest_req));
+		break;
+	default:
+		/* don't even try */
+		return -1;
+	}
 
 	fwrite(gbuf, 1, nrq, stderr);
 	if (ws->c) {
@@ -219,49 +237,13 @@ Connection: Upgrade\r\n\
 	return nrd;
 }
 
-static ssize_t
-wamp_init(ws_t ws, const char *host, const char *rsrc, size_t rlen)
-{
-	static const char greq[] = "\
-Sec-WebSocket-Version: 13\r\n\
-Sec-WebSocket-Key: e8w+o5wQsV0rXFezPUS8XQ==\r\n\
-Sec-WebSocket-Protocol: wamp.2.json\r\n\
-Upgrade: websocket\r\n\
-Connection: Upgrade\r\n\
-\r\n";
-	size_t nrq = 0U;
-	ssize_t nrd;
-
-	nrq += memncpy(gbuf + nrq, "GET /", 5U);
-	nrq += memncpy(gbuf + nrq, rsrc, rlen);
-	gbuf[nrq++] = ' ';
-	nrq += memncpy(gbuf + nrq, "HTTP/1.1\r\nHost: ", 16U);
-	nrq += memncpy(gbuf + nrq, host, strlen(host));
-	gbuf[nrq++] = '\r';
-	gbuf[nrq++] = '\n';
-	nrq += memncpy(gbuf + nrq, greq, strlenof(greq));
-
-	fwrite(gbuf, 1, nrq, stderr);
-	if (ws->c) {
-		tls_send(ws->c, gbuf, nrq, 0);
-		nrd = tls_recv(ws->c, gbuf, gbsz, 0);
-	} else {
-		send(ws->s, gbuf, nrq, 0);
-		nrd = recv(ws->s, gbuf, gbsz, 0);
-	}
-	if (UNLIKELY(nrd <= 0)) {
-		return -1;
-	}
-	fwrite(gbuf, 1, nrd, stderr);
-	return nrd;
-}
-
 
 ws_t
 ws_open(const char *url)
 {
 	size_t urz = strlen(url);
 	char buf[urz + 1U];
+	ws_proto_t p = WS_PROTO_RAW;
 	int sslp = 0;
 	const char *host;
 	const char *rsrc;;
@@ -272,22 +254,25 @@ ws_open(const char *url)
 	/* copy to stack buffer */
 	memcpy(buf, url, urz + 1U);
 
-	/* see if it contains a prefix, ws:// or wss:// */
-	do {
-		if (buf[4U] == '/') {
-			/* might do */
-			if ((buf[3U] == ':' ||
-			     buf[3U] == '/' && buf[2U] == ':') &&
-			    (buf[0U] == 'w' && buf[1U] == 's')) {
-				/* safe to say it does */
-				sslp = buf[2U] == 's';
-				host = buf + 5U + sslp;
-				break;
-			}
-		}
+	/* guess the proto */
+	if (0) {
+		;
+	} else if (!memcmp(buf, "ws", 2U) &&
+		   (sslp = buf[2U] == 's', !memcmp(buf + 2U + sslp, "://", 3U))) {
+		p = WS_PROTO_RAW;
+		host = buf + 2U + sslp + 3U;
+	} else if (!memcmp(buf, "wamp", 4U) &&
+		   (sslp = buf[4U] == 's', !memcmp(buf + 4U + sslp, "://", 3U))) {
+		p = WS_PROTO_WAMP;
+		host = buf + 4U + sslp + 3U;
+	} else if (!memcmp(buf, "http", 4U) &&
+		   (sslp = buf[4U] == 's', !memcmp(buf + 4U + sslp, "://", 3U))) {
+		p = WS_PROTO_REST;
+		host = buf + 4U + sslp + 3U;
+	} else {
 		/* otherwise assume the host right away */
 		host = buf;
-	} while (0);
+	}
 
 	/* look for the resource */
 	if (UNLIKELY((on = memchr(host, '/', buf + urz - host)) == NULL)) {
@@ -327,96 +312,22 @@ ws_open(const char *url)
 	if (UNLIKELY((ws = _open(host, port, sslp)) == NULL)) {
 		goto nil;
 	}
-
+	/* stash proto */
+	switch ((ws->p = p)) {
+	default:
+		break;
+	case WS_PROTO_REST:
+		/* don't call nothing yet */
+		ws->host = strdup(host);
+		ws->hstz = strlen(host);
+		return ws;
+	}
 	/* fiddle with the port param again */
 	if (UNLIKELY(on != 0)) {
 		*on = ':';
 	}
 	/* construct the request */
 	if (UNLIKELY(_init(ws, host, rsrc, buf + urz - rsrc) < 0)) {
-		goto fre;
-	}
-	return ws;
-
-fre:
-	ws_close(ws);
-nil:
-	return NULL;
-}
-
-ws_t
-wamp_open(const char *url)
-{
-	size_t urz = strlen(url);
-	char buf[urz + 1U];
-	int sslp = 0;
-	const char *host;
-	const char *rsrc;;
-	short unsigned int port;
-	char *on;
-	ws_t ws;
-
-	/* copy to stack buffer */
-	memcpy(buf, url, urz + 1U);
-
-	/* see if it contains a prefix, ws:// or wss:// */
-	do {
-		if (buf[4U] == '/') {
-			/* might do */
-			if ((buf[3U] == ':' ||
-			     buf[3U] == '/' && buf[2U] == ':') &&
-			    (buf[0U] == 'w' && buf[1U] == 's')) {
-				/* safe to say it does */
-				sslp = buf[2U] == 's';
-				host = buf + 5U + sslp;
-				break;
-			}
-		}
-		/* otherwise assume the host right away */
-		host = buf;
-	} while (0);
-
-	/* look for the resource */
-	if (UNLIKELY((on = memchr(host, '/', buf + urz - host)) == NULL)) {
-		/* ok doke, we're using / and the whole thing as host */
-		rsrc = buf + urz;
-	} else {
-		/* mark the end of host */
-		*on++ = '\0';
-		rsrc = on;
-	}
-
-	/* look out for ports in the host part */
-	if (UNLIKELY((on = memchr(host, ':', rsrc - host)) == NULL)) {
-		/* no port given */
-		port = (unsigned short)(sslp ? 443 : 80);
-	} else {
-		long unsigned int x;
-		*on++ = '\0';
-		if (UNLIKELY((x = strtoul(on, &on, 10)) == 0U)) {
-			/* cannot read port argument, fuck off */
-			goto nil;
-		} else if (UNLIKELY(x >= 65536U)) {
-			goto nil;
-		}
-		/* all is good */
-		port = x;
-	}
-
-	if (UNLIKELY(gbsz < 4096U)) {
-		gbsz = 4096U;
-		if (UNLIKELY((gbuf = malloc(gbsz)) == NULL)) {
-			goto nil;
-		}
-	}
-
-	/* try and establish a connection */
-	if (UNLIKELY((ws = _open(host, port, sslp)) == NULL)) {
-		goto nil;
-	}
-
-	/* construct the request */
-	if (UNLIKELY(wamp_init(ws, host, rsrc, buf + urz - rsrc) < 0)) {
 		goto fre;
 	}
 	return ws;
@@ -434,6 +345,13 @@ ws_close(ws_t ws)
 		close_tls(ws->c);
 	} else {
 		close(ws->s);
+	}
+	switch (ws->p) {
+	default:
+		break;
+	case WS_PROTO_REST:
+		free(deconst(ws->host));
+		break;
 	}
 	*ws = (struct ws_s){.s = -1};
 	free(ws);
@@ -686,6 +604,125 @@ ws_pong(ws_t ws, const void *msg, size_t msz)
 		return (tls_send(ws->c, pong, ponz, 0) >= 0) - 1U;
 	}
 	return (send(ws->s, pong, ponz, 0) >= 0) - 1U;
+}
+
+ssize_t
+rest_recv(ws_t ws, void *restrict buv, size_t bsz, int flags)
+{
+/* we guarantee that a whole message ends in \n */
+#define HDR_SEEN	1U
+#define LEN_SEEN	2U
+#define ENC_SEEN	4U
+	char *restrict buf = buv;
+	ssize_t nrd = 0;
+
+	if (ws->c) {
+		nrd = tls_recv(ws->c, buf, bsz, flags);
+	} else {
+		nrd = recv(ws->s, buf, bsz, flags);
+	}
+	if (UNLIKELY(nrd <= 0)) {
+		return -1;
+	}
+	/* see if we need to snarf headers first */
+	if (!ws->state) {
+		/* ah, headers innit */
+		static const char clen1[] = "Content-Length:";
+		static const char clen2[] = "Transfer-Encoding:";
+		const char *p;
+
+		if ((p = xmemmem(buf, nrd, clen1, strlenof(clen1)))) {
+			/* couldn't be more perfect */
+			ws->togo = strtoul(p, NULL, 10);
+			ws->state |= LEN_SEEN;
+		} else if ((p = xmemmem(buf, nrd, clen2, strlenof(clen2)))) {
+			/* chunked, shit */
+			ws->togo = 0U;
+			ws->state |= ENC_SEEN;
+		}
+	}
+	if (!(ws->state & HDR_SEEN)) {
+		const char *p;
+
+		if (UNLIKELY(!(p = xmemmem(buf, nrd, "\r\n\r\n", 4U)))) {
+			/* just forget about it all */
+			return 0;
+		} else if ((nrd -= p - buf)) {
+			memmove(buf, p, nrd);
+			ws->state |= HDR_SEEN;
+		}
+	}
+
+	if (ws->state & LEN_SEEN) {
+		if (nrd < ws->togo) {
+			ws->togo -= nrd;
+		} else {
+			/* otherwise we've seen it all */
+			nrd = ws->togo;
+			ws->togo = 0U;
+			ws->state = 0U;
+			/* finalise */
+			buf[nrd++] = '\n';
+		}
+	} else if (ws->state & ENC_SEEN) {
+		if (!ws->togo) {
+			char *on;
+			ws->togo = strtoul(buf, &on, 16U);
+			if (!ws->togo || *on++ != '\r' || *on++ != '\n') {
+				/* god knows */
+				ws->state = 0;
+				nrd = 0;
+				/* finalise */
+				buf[nrd++] = '\n';
+				return nrd;
+			} else {
+				nrd -= on - buf;
+				memmove(buf, on, nrd);
+			}
+		}
+
+		if (nrd < ws->togo) {
+			ws->togo -= nrd;
+		} else {
+			nrd = ws->togo;
+			ws->togo = 0U;
+		}
+	}
+	return nrd;
+}
+
+ssize_t
+rest_send(ws_t ws, const char *url, size_t urz, int flags)
+{
+	static const char rest_req[] = "\
+User-Agent: Mozilla/4.0\r\n\
+\r\n";
+	size_t nrq = 0U;
+	ssize_t nwr;
+
+	if (UNLIKELY(ws->p != WS_PROTO_REST)) {
+		return -1;
+	}
+
+	nrq += memncpy(gbuf + nrq, "GET ", 4U);
+	nrq += memncpy(gbuf + nrq, url, urz);
+	gbuf[nrq++] = ' ';
+	nrq += memncpy(gbuf + nrq, "HTTP/1.1\r\nHost: ", 16U);
+	nrq += memncpy(gbuf + nrq, ws->host, ws->hstz);
+	gbuf[nrq++] = '\r';
+	gbuf[nrq++] = '\n';
+	nrq += memncpy(gbuf + nrq, rest_req, strlenof(rest_req));
+
+	fwrite(gbuf, 1, nrq, stderr);
+	if (ws->c) {
+		nwr = tls_send(ws->c, gbuf, nrq, flags);
+	} else {
+		nwr = send(ws->s, gbuf, nrq, flags);
+	}
+	/* reset state */
+	ws->state = 0U;
+	ws->togo = 0U;
+	return nwr;
 }
 
 /* ws.c ends here */

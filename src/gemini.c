@@ -61,7 +61,8 @@ Error: instrument must be one of btcusd, ethusd, ethbtc");
 	memcpy(api_url + strlenof(API_URL), logfile, 6U);
 
 	/* obtain a loop */
-	wss = make_wssnarf((wssnarf_param_t){api_url, logfile});
+	wss = make_wssnarf(logfile);
+	add_wssnarf(wss, (wssnarf_param_t){api_url, 6.0, 30.0});
 
 	/* run the loop */
 	run_wssnarf(wss);

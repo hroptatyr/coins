@@ -57,7 +57,8 @@ main(int argc, char *argv[])
 	}
 
 	/* obtain a loop */
-	wss = make_wssnarf((wssnarf_param_t){API_URL, "prices"});
+	wss = make_wssnarf("prices");
+	add_wssnarf(wss, (wssnarf_param_t){API_URL, 6.0, 30.0});
 
 	/* run the loop */
 	run_wssnarf(wss);

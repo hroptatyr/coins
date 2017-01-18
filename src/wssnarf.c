@@ -20,17 +20,8 @@
 #include "wssnarf.h"
 #include "nifty.h"
 
-#define NTIMEOUTS	10
 #define ONE_DAY		86400.0
 #define MIDNIGHT	0.0
-#define ONE_WEEK	604800.0
-#define SATURDAY	172800.0
-#define SUNDAY		302400.0
-
-/* number of seconds we tolerate inactivity in the beef channels */
-#define MAX_INACT	(30)
-
-#define strlenof(x)	(sizeof(x) - 1U)
 
 #if defined __INTEL_COMPILER
 # pragma warning (disable:2259)
@@ -59,34 +50,35 @@ typedef enum {
 
 struct wssnarf_s {
 	/* libev's idea of the socket below */
-	ev_io watcher[1];
-	ev_timer timer[1];
 	ev_signal sigi[1];
 	ev_signal sigp[1];
 	ev_signal sigh[1];
 	ev_periodic midnight[1];
 	ev_prepare prep[1];
 
-	/* websocket context */
-	ws_t ws;
+	/* number of registered sockets */
+	size_t ns;
+	/* socket context */
+	ws_t ws[8U];
+	wssnarf_param_t p[8U];
+	ev_io watcher[8U];
+	ev_timer timer[8U];
+	coin_st_t st[8U];
+	struct timespec last_act[8U];
+	struct {
+		char *p;
+		size_t z;
+		size_t n;
+	} sbuf[8U];
 
-	/* state */
-	coin_st_t st;
+	char hostname[256U];
 
-	struct timespec last_act[1];
-
-	/* user shit */
-	struct coin_bla_s *ctx;
-
-	char hostname[256];
-	wssnarf_param_t p;
+	const char *logfile;
 	int logfd;
 };
 
 /* always have room for the timestamp */
 #define INI_GBOF	21U
-static char gbuf[1048576U];
-static size_t gbof = INI_GBOF;
 
 
 static __attribute__((format(printf, 1, 2))) void
@@ -143,70 +135,60 @@ close_sock(int fd)
 }
 
 
-static inline size_t
-memncpy(char *restrict tgt, const char *src, size_t zrc)
-{
-	memcpy(tgt, src, zrc);
-	return zrc;
-}
-
-static inline size_t
-memnmove(char *tgt, const char *src, size_t zrc)
-{
-	memmove(tgt, src, zrc);
-	return zrc;
-}
-
 static int
 loghim(int logfd, const char *buf, size_t len)
 {
+	char xbuf[len + INI_GBOF + 1U];
 	size_t prfz;
 
 	/* this is a prefix that we prepend to each line */
-	prfz = hrclock_print(gbuf + gbof, INI_GBOF);
-	gbuf[gbof + prfz++] = '\t';
+	prfz = hrclock_print(xbuf, INI_GBOF);
+	xbuf[prfz++] = '\t';
 
-	memmove(gbuf + gbof + prfz, buf, len);
-	gbuf[gbof + prfz + len++] = '\n';
-	write(logfd, gbuf + gbof, prfz + len);
-	fwrite(gbuf + gbof, 1, prfz + len, stderr);
+	memcpy(xbuf + prfz, buf, len);
+	xbuf[prfz + len++] = '\n';
+	write(logfd, xbuf, prfz + len);
+	fwrite(xbuf, 1, prfz + len, stderr);
 	return 0;
 }
 
 static ssize_t
-logwss(int logfd, const char *buf, size_t len)
+logwss(int logfd, char *buf, size_t len)
 {
+/* BUF is assumed to contain INI_GBOF bytes of breathing space */
 	const char *lp = buf;
 	size_t prfz;
 
 	/* this is a prefix that we prepend to each line */
-	prfz = hrclock_print(gbuf, INI_GBOF);
-	gbuf[prfz++] = '\t';
+	prfz = hrclock_print(buf - INI_GBOF, INI_GBOF);
+	buf[prfz++ - INI_GBOF] = '\t';
 
 	for (const char *eol, *const ep = buf + len;
 	     lp < ep && (eol = memchr(lp, '\n', ep - lp));
 	     lp = eol + 1U) {
 		size_t z;
-		z = memnmove(gbuf + prfz, lp, eol - lp);
-		gbuf[prfz + z++] = '\n';
-		z = massage(gbuf + prfz, z);
-		write(logfd, gbuf, prfz + (eol - lp) + 1U);
-		fwrite(gbuf, 1, prfz + (eol - lp) + 1U, stderr);
+		z = memnmove(buf + prfz - INI_GBOF, lp, eol - lp);
+		buf[prfz - INI_GBOF + z++] = '\n';
+		z = massage(buf + prfz - INI_GBOF, z);
+		write(logfd, buf - INI_GBOF, prfz + z);
+		fwrite(buf - INI_GBOF, 1, prfz + z, stderr);
 	}
 	return lp - buf;
 }
 
 
-static void
-open_outfile(wssnarf_t ctx)
+static int
+open_outfile(const char *logfile)
 {
-	if ((ctx->logfd = open(ctx->p.ofn, O_WRONLY | O_CREAT, 0644)) < 0) {
-		serror("cannot open outfile `%s'", ctx->p.ofn);
-		exit(EXIT_FAILURE);
+	int s;
+
+	if ((s = open(logfile, O_WRONLY | O_CREAT, 0644)) < 0) {
+		serror("cannot open outfile `%s'", logfile);
+		return -1;
 	}
 	/* coinw to the end */
-	lseek(ctx->logfd, 0, SEEK_END);
-	return;
+	lseek(s, 0, SEEK_END);
+	return s;
 }
 
 static void
@@ -221,7 +203,7 @@ rotate_outfile(wssnarf_t ctx)
 	/* get a recent time stamp */
 	now = time(NULL);
 	gmtime_r(&now, tm);
-	n += lnz = memncpy(n, ctx->p.ofn, strlen(ctx->p.ofn));
+	n += lnz = memncpy(n, ctx->logfile, strlen(ctx->logfile));
 	*n++ = '-';
 	n += hnz = memncpy(n, ctx->hostname, strlen(ctx->hostname));
 	*n++ = '-';
@@ -233,8 +215,8 @@ rotate_outfile(wssnarf_t ctx)
 	loghim(ctx->logfd, msg, sizeof(msg) - 1);
 	close_sock(ctx->logfd);
 	/* rename it and reopen under the old name */
-	rename(ctx->p.ofn, new);
-	open_outfile(ctx);
+	rename(ctx->logfile, new);
+	ctx->logfd = open_outfile(ctx->logfile);
 	return;
 }
 
@@ -244,10 +226,20 @@ ws_cb(EV_P_ ev_io *w, int UNUSED(revents))
 {
 /* we know that w is part of the coin_ctx_s structure */
 	wssnarf_t ctx = w->data;
-	size_t maxr = sizeof(gbuf) - gbof;
+	const size_t idx = w - ctx->watcher;
+	size_t xn = ctx->sbuf[idx].n;
+	size_t xz = ctx->sbuf[idx].z;
+	char *xp = ctx->sbuf[idx].p;
 	ssize_t nrd;
 
-	if ((nrd = ws_recv(ctx->ws, gbuf + gbof, maxr, 0)) <= 0) {
+	/* check if there's still room for, say, 4000U bytes */
+	if (UNLIKELY(xz < xn + 4000U)) {
+		const size_t nuz = (xz * 2U) ?: 4096U;
+		ctx->sbuf[idx].p = xp = realloc(xp, nuz);
+		ctx->sbuf[idx].z = xz = nuz;
+	}
+
+	if ((nrd = ws_recv(ctx->ws[idx], xp + xn, xz - xn, 0)) <= 0) {
 		/* connexion reset or something? */
 		serror("recv(%d) failed, read %zi", w->fd, nrd);
 		goto unroll;
@@ -255,73 +247,125 @@ ws_cb(EV_P_ ev_io *w, int UNUSED(revents))
 
 #if 1
 /* debugging */
-	fprintf(stderr, "WS (%u) read %zu+%zi/%zu bytes\n", ctx->st, gbof, nrd, maxr);
+	fprintf(stderr, "WS[%zu](%u) read %zu+%zi/%zu bytes\n", idx, ctx->st[idx], xn, nrd, xz);
 #endif	/* 1 */
 
 	/* advance gbof */
-	gbof += nrd;
-	switch (ctx->st) {
+	xn += nrd;
+	switch (ctx->st[idx]) {
 		ssize_t npr;
 		int r;
 
 	case COIN_ST_UNK:
-		ctx->st = COIN_ST_CONN;
+		ctx->st[idx] = COIN_ST_CONN;
 	case COIN_ST_CONN:
 		/* we've got a cb whilst authing,
 		 * see what the authd predicate has to say */
-		if ((r = connd_coin(gbuf + INI_GBOF, gbof - INI_GBOF)) < 0) {
+		if ((r = connd_coin(xp + INI_GBOF, xn - INI_GBOF)) < 0) {
 			/* complete failue */
 			goto logunr;
 		}
 		/* see if we can upgrade the connection */
-		ctx->st += (coin_st_t)(r > 0);
+		ctx->st[idx] += (coin_st_t)(r > 0);
 	case COIN_ST_CONND:
 		goto log;
 
 	case COIN_ST_AUTH:
 		/* we've got a cb whilst authing,
 		 * see what the authd predicate has to say */
-		if ((r = authd_coin(gbuf + INI_GBOF, gbof - INI_GBOF)) < 0) {
+		if ((r = authd_coin(xp + INI_GBOF, xn - INI_GBOF)) < 0) {
 			/* complete failue */
 			goto logunr;
 		}
 		/* see if we can upgrade the connection */
-		ctx->st += (coin_st_t)(r > 0);
+		ctx->st[idx] += (coin_st_t)(r > 0);
 	case COIN_ST_AUTHD:
 		goto log;
 
 	case COIN_ST_JOIN:
 		/* see what they say about the joinedness */
-		if ((r = joind_coin(gbuf + INI_GBOF, gbof - INI_GBOF)) < 0) {
+		if ((r = joind_coin(xp + INI_GBOF, xn - INI_GBOF)) < 0) {
 			/* complete failue */
 			goto logunr;
 		}
 		/* see if we can upgrade the connection */
-		ctx->st += (coin_st_t)(r > 0);
+		ctx->st[idx] += (coin_st_t)(r > 0);
 	case COIN_ST_JOIND:
 	log:
 		/* log him */
-		npr = logwss(ctx->logfd, gbuf + INI_GBOF, gbof - INI_GBOF);
-		memnmove(gbuf + INI_GBOF, gbuf + INI_GBOF + npr, gbof - npr);
-		gbof -= npr;
+		npr = logwss(ctx->logfd, xp + INI_GBOF, xn - INI_GBOF);
+		memmove(xp + INI_GBOF, xp + INI_GBOF + npr, xn - npr);
+		xn -= npr;
 
 		/* keep a reference of our time stamp */
-		*ctx->last_act = *tsp;
+		ctx->last_act[idx] = *tsp;
 		break;
 
 	default:
-		gbof = INI_GBOF;
+		xn = INI_GBOF;
 		break;
 	}
+
+	ctx->sbuf[idx].n = xn;
 	return;
 
 logunr:
-	logwss(ctx->logfd, gbuf + INI_GBOF, gbof + nrd - INI_GBOF);
+	logwss(ctx->logfd, xp + INI_GBOF, xn + nrd - INI_GBOF);
 unroll:
 	/* connection reset */
-	loghim(ctx->logfd, "restart", 7);
+	loghim(ctx->logfd, "restart", 7U);
 	ev_break(EV_A_ EVBREAK_ALL);
-	gbof = INI_GBOF;
+	return;
+}
+
+static void
+rest_cb(EV_P_ ev_io *w, int UNUSED(revents))
+{
+/* we know that w is part of the coin_ctx_s structure */
+	wssnarf_t ctx = w->data;
+	size_t idx = w - ctx->watcher;
+	size_t xn = ctx->sbuf[idx].n;
+	size_t xz = ctx->sbuf[idx].z;
+	char *xp = ctx->sbuf[idx].p;
+	ssize_t nrd;
+	ssize_t npr;
+
+	/* check if there's still room for, say, 4096U bytes */
+	if (UNLIKELY(xz < xn + 4096U)) {
+		const size_t nuz = (xz * 2U) ?: 4096U;
+		ctx->sbuf[idx].p = xp = realloc(xp, nuz);
+		ctx->sbuf[idx].z = xz = nuz;
+	}
+
+	if ((nrd = rest_recv(ctx->ws[idx], xp + xn, xz - xn, 0)) < 0) {
+		/* connexion reset or something? */
+		serror("recv(%d) failed, read %zi", w->fd, nrd);
+		/* stop the watcher */
+		ev_io_stop(EV_A_ w);
+
+		/* shutdown the network socket */
+		if (ctx->ws[idx] != NULL) {
+			ws_close(ctx->ws[idx]);
+		}
+		ctx->ws[idx] = NULL;
+		ctx->st[idx] = COIN_ST_UNK;
+		xn = INI_GBOF;
+		goto out;
+	}
+
+#if 1
+/* debugging */
+	fprintf(stderr, "REST (%u) read %zu+%zi/%zu bytes\n", ctx->st[idx], xn, nrd, xz);
+#endif	/* 1 */
+
+	/* advance gbof */
+	xn += nrd;
+	/* log him */
+	npr = logwss(ctx->logfd, xp + INI_GBOF, xn - INI_GBOF);
+	memmove(xp + INI_GBOF, xp + INI_GBOF + npr, xn - npr);
+	xn -= npr;
+out:
+	ctx->sbuf[idx].n = xn;
 	return;
 }
 
@@ -345,10 +389,11 @@ static void
 hbeat_cb(EV_PU_ ev_timer *w, int UNUSED(revents))
 {
 	wssnarf_t ctx = w->data;
+	size_t idx = w - ctx->timer;
 
 	loghim(ctx->logfd, "HEARTBEAT", 9U);
-	if (UNLIKELY(heartbeat(ctx->ws) < 0)) {
-		ctx->st = COIN_ST_NODATA;
+	if (UNLIKELY(heartbeat(ctx->ws[idx]) < 0)) {
+		ctx->st[idx] = COIN_ST_NODATA;
 	}
 	return;
 }
@@ -358,47 +403,59 @@ sigint_cb(EV_PU_ ev_signal *w, int UNUSED(revents))
 {
 	wssnarf_t ctx = w->data;
 	/* quit the whole shebang */
-	loghim(ctx->logfd, "C-c", 3);
-	ctx->st = COIN_ST_INTR;
+	loghim(ctx->logfd, "C-c", 3U);
+
+	/* consider them all interrupted */
+	for (size_t i = 0U; i < ctx->ns; i++) {
+		ctx->st[i] = COIN_ST_INTR;
+	}
 	return;
 }
 
 
 static int
-open_coin(EV_P_ wssnarf_t ctx)
+open_coin(EV_P_ wssnarf_t ctx, size_t idx)
 {
 /* this init process is two part: request a token, then do the subscriptions */
-	gbof = INI_GBOF;
-
 	fprintf(stderr, "INIT\n");
-	ev_timer_again(EV_A_ ctx->timer);
-	if ((ctx->ws = ws_open(ctx->p.url)) < 0) {
+	ev_timer_again(EV_A_ &ctx->timer[idx]);
+	if ((ctx->ws[idx] = ws_open(ctx->p[idx].url)) < 0) {
 		serror("Error: cannot connect");
 		/* better retry */
 		return -1;
 	}
 
-	ev_io_init(ctx->watcher, ws_cb, ws_fd(ctx->ws), EV_READ);
-	ev_io_start(EV_A_ ctx->watcher);
-	ctx->watcher->data = ctx;
+	switch (ws_proto(ctx->ws[idx])) {
+	case WS_PROTO_RAW:
+	case WS_PROTO_WAMP:
+		ev_io_init(&ctx->watcher[idx], ws_cb, ws_fd(ctx->ws[idx]), EV_READ);
+		break;
+	case WS_PROTO_REST:
+		ev_io_init(&ctx->watcher[idx], rest_cb, ws_fd(ctx->ws[idx]), EV_READ);
+		break;
+	default:
+		errno = 0, serror("Error: unknown protocol");
+		ws_close(ctx->ws[idx]);
+		return -1;
+	}
+	ev_io_start(EV_A_ &ctx->watcher[idx]);
+	ctx->watcher[idx].data = ctx;
+	ctx->st[idx] = COIN_ST_UNK;
 	return 1;
 }
 
 static int
-fini_coin(EV_P_ wssnarf_t ctx)
+fini_coin(EV_P_ wssnarf_t ctx, size_t idx)
 {
 	fprintf(stderr, "DEINIT\n");
 	/* stop the watcher */
-	ev_io_stop(EV_A_ ctx->watcher);
+	ev_io_stop(EV_A_ &ctx->watcher[idx]);
 
 	/* shutdown the network socket */
-	if (ctx->ws != NULL) {
-		ws_close(ctx->ws);
+	if (ctx->ws[idx] != NULL) {
+		ws_close(ctx->ws[idx]);
 	}
-	ctx->ws = NULL;
-
-	/* set the state to unknown */
-	gbof = INI_GBOF;
+	ctx->ws[idx] = NULL;
 	return 0;
 }
 
@@ -459,21 +516,23 @@ static void
 prepare(EV_P_ ev_prepare *w, int UNUSED(revents))
 {
 	wssnarf_t ctx = w->data;
+	size_t idx = 0U;
 
-	fprintf(stderr, "PREP(%u)\n", ctx->st);
-	switch (ctx->st) {
+more:
+	fprintf(stderr, "PREP[%zu](%u)\n", idx, ctx->st[idx]);
+	switch (ctx->st[idx]) {
 		int r;
 
 	case COIN_ST_UNK:
-		if ((r = open_coin(EV_A_ ctx)) < 0) {
+		if ((r = open_coin(EV_A_ ctx, idx)) < 0) {
 			goto disc;
 		}
 		/* reset gbof and go for it */
-		gbof = INI_GBOF;
-		ctx->st = COIN_ST_CONN;
+		ctx->sbuf[idx].n = INI_GBOF;
+		ctx->st[idx] = COIN_ST_CONN;
 	case COIN_ST_CONN:
 		/* initialise everything, sets the state */
-		if ((r = conn_coin(ctx->ws)) < 0) {
+		if ((r = conn_coin(ctx->ws[idx])) < 0) {
 			goto disc;
 		} else if (r == 0) {
 			/* we need to wait */
@@ -483,14 +542,16 @@ prepare(EV_P_ ev_prepare *w, int UNUSED(revents))
 		;
 	case COIN_ST_CONND:
 		/* reset nothing counter and start the nothing timer */
-		gbof = INI_GBOF;
-		ctx->st = COIN_ST_AUTH;
+		ctx->sbuf[idx].n = INI_GBOF;
+		ctx->st[idx] = COIN_ST_AUTH;
 
 	case COIN_ST_AUTH:
 		/* let's auth */
-		if ((r = auth_coin(ctx->ws)) < 0) {
+		if (ws_proto(ctx->ws[idx]) == WS_PROTO_REST) {
+			;
+		} else if ((r = auth_coin(ctx->ws[idx])) < 0) {
 			/* unsuccessful */
-			ctx->st = COIN_ST_CONND;
+			ctx->st[idx] = COIN_ST_CONND;
 			break;
 		} else if (r == 0) {
 			/* we need to wait */
@@ -499,24 +560,29 @@ prepare(EV_P_ ev_prepare *w, int UNUSED(revents))
 		/* otherwise fast propagation */
 		;
 	case COIN_ST_AUTHD:
-		gbof = INI_GBOF;
-		ctx->st = COIN_ST_JOIN;
+		ctx->sbuf[idx].n = INI_GBOF;
+		ctx->st[idx] = COIN_ST_JOIN;
 
 	case COIN_ST_JOIN:
 		/* let's join */
-		if ((r = join_coin(ctx->ws)) < 0) {
+		if (ws_proto(ctx->ws[idx]) == WS_PROTO_REST) {
+			;
+		} else if ((r = join_coin(ctx->ws[idx])) < 0) {
 			/* unsuccessful, go back to authd */
-			ctx->st = COIN_ST_AUTHD;
+			ctx->st[idx] = COIN_ST_AUTHD;
 			break;
 		} else if (r == 0) {
 			break;
 		}
 		/* otherwise we're good to go */
-		ctx->st = COIN_ST_JOIND;
+		ctx->st[idx] = COIN_ST_JOIND;
 
 	case COIN_ST_JOIND:
 		/* check if there's messages from the channel */
-		if (tsp->tv_sec - ctx->last_act->tv_sec < ctx->p.max_inact) {
+		if (ws_proto(ctx->ws[idx]) == WS_PROTO_REST) {
+			break;
+		} else if (tsp->tv_sec - ctx->last_act[idx].tv_sec <
+		    ctx->p[idx].max_inact) {
 			break;
 		}
 		/* fallthrough */
@@ -524,13 +590,17 @@ prepare(EV_P_ ev_prepare *w, int UNUSED(revents))
 	case COIN_ST_INTR:
 	disc:
 		/* disconnect and unroll */
-		fini_coin(EV_A_ ctx);
-		ctx->st = COIN_ST_FINI;
+		fini_coin(EV_A_ ctx, idx);
+		ctx->st[idx] = COIN_ST_FINI;
 	case COIN_ST_FINI:
 		ev_break(EV_A_ EVBREAK_ALL);
 		break;
 	default:
 		break;
+	}
+	if (++idx < ctx->ns) {
+		/* go through all the other sockets too */
+		goto more;
 	}
 	return;
 }
@@ -545,9 +615,9 @@ init_ev(EV_P_ wssnarf_t ctx)
 	ctx->sigi->data = ctx;
 	ctx->sigp->data = ctx;
 
-	/* inc nothing counter every 3 seconds */
-	ev_timer_init(ctx->timer, hbeat_cb, 0.0, TIMEOUT);
-	ctx->timer->data = ctx;
+	ev_prepare_init(ctx->prep, prepare);
+	ev_prepare_start(EV_A_ ctx->prep);
+	ctx->prep->data = ctx;
 
 	/* the midnight tick for file rotation, also upon sighup */
 	ev_periodic_init(ctx->midnight, midnight_cb, MIDNIGHT, ONE_DAY, NULL);
@@ -556,18 +626,12 @@ init_ev(EV_P_ wssnarf_t ctx)
 	ev_signal_start(EV_A_ ctx->sigh);
 	ctx->midnight->data = ctx;
 	ctx->sigh->data = ctx;
-
-	/* prepare and check cbs */
-	ev_prepare_init(ctx->prep, prepare);
-	ev_prepare_start(EV_A_ ctx->prep);
-	ctx->prep->data = ctx;
 	return;
 }
 
 static void
 deinit_ev(EV_P_ wssnarf_t ctx)
 {
-	ev_timer_stop(EV_A_ ctx->timer);
 	ev_signal_stop(EV_A_ ctx->sigi);
 	ev_signal_stop(EV_A_ ctx->sigp);
 
@@ -580,20 +644,13 @@ deinit_ev(EV_P_ wssnarf_t ctx)
 
 
 wssnarf_t
-make_wssnarf(wssnarf_param_t prm)
+make_wssnarf(const char *logfile)
 {
 	struct wssnarf_s *r = calloc(1U, sizeof(*r));
-	EV_P = ev_default_loop(0);
-
-	r->p = prm;
-	init_ev(EV_A_ r);
-
-	if (r->p.max_inact <= 0) {
-		r->p.max_inact = 1e48;
-	}
 
 	/* make sure we've got something to write to */
-	open_outfile(r);
+	r->logfile = logfile;
+	r->logfd = open_outfile(r->logfile);
 
 	/* put the hostname behind logfile */
 	(void)gethostname(r->hostname, sizeof(r->hostname));
@@ -604,19 +661,56 @@ void
 free_wssnarf(wssnarf_t ctx)
 {
 	EV_P = ev_default_loop(0);
-	deinit_ev(EV_A_ ctx);
 	close_sock(ctx->logfd);
+
+	for (size_t i = 0U; i < ctx->ns; i++) {
+		if (LIKELY(ctx->sbuf[i].p != NULL)) {
+			free(ctx->sbuf[i].p);
+		}
+	}
 	free(ctx);
-	ev_loop_destroy(EV_DEFAULT_UC);
+	ev_loop_destroy(EV_A);
 	return;
 }
 
 int
-run_wssnarf(wssnarf_t UNUSED(ctx))
+run_wssnarf(wssnarf_t ctx)
 {
 	EV_P = ev_default_loop(0);
+
+	/* init */
+	init_ev(EV_A_ ctx);
 	/* work */
 	ev_run(EV_A_ 0);
+	/* fini */
+	deinit_ev(EV_A_ ctx);
+	return 0;
+}
+
+int
+add_wssnarf(wssnarf_t ctx, wssnarf_param_t prm)
+{
+	EV_P = ev_default_loop(0);
+
+	if (prm.max_inact <= 0) {
+		prm.max_inact = 1e48;
+	}
+	ctx->p[ctx->ns] = prm;
+
+	/* initialise heartbeat */
+	if (LIKELY(prm.heartbeat > 0)) {
+		ev_timer_init(&ctx->timer[ctx->ns], hbeat_cb, 0.0, prm.heartbeat);
+		ev_timer_start(EV_A_ &ctx->timer[ctx->ns]);
+		ctx->timer[ctx->ns].data = ctx;
+	}
+	ctx->ns++;
+	return 0;
+}
+
+int
+wssnarf_log(wssnarf_t ctx, const char *buf, size_t bsz)
+{
+	loghim(ctx->logfd, buf, bsz);
 	return 0;
 }
 

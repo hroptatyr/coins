@@ -39,13 +39,6 @@ typedef enum {
 } btf_subt_t;
 
 
-static inline size_t
-memncpy(char *restrict tgt, const char *src, size_t len)
-{
-	(void)memcpy(tgt, src, len);
-	return len;
-}
-
 static char*
 xmemmem(const char *hay, const size_t hayz, const char *ndl, const size_t ndlz)
 {

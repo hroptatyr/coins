@@ -44,13 +44,6 @@ error(const char *fmt, ...)
 	return;
 }
 
-static inline size_t
-memncpy(char *restrict tgt, const char *src, size_t len)
-{
-	(void)memcpy(tgt, src, len);
-	return len;
-}
-
 static tv_t
 strtotv(const char *ln, char **endptr)
 {

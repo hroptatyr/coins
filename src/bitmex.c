@@ -24,14 +24,6 @@ static const char *const *subs;
 static size_t nsubs;
 
 
-static inline size_t
-memncpy(char *restrict tgt, const char *src, size_t zrc)
-{
-	memcpy(tgt, src, zrc);
-	return zrc;
-}
-
-
 int
 join_coin(ws_t ws)
 {
@@ -89,7 +81,8 @@ main(int argc, char *argv[])
 	nsubs = argi->nargs;
 
 	/* obtain a loop */
-	wss = make_wssnarf((wssnarf_param_t){API_URL, "prices"});
+	wss = make_wssnarf("prices");
+	add_wssnarf(wss, (wssnarf_param_t){API_URL, 0.0, 30.0});
 
 	/* run the loop */
 	run_wssnarf(wss);

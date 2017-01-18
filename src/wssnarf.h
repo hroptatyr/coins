@@ -9,14 +9,19 @@ typedef struct wssnarf_s *wssnarf_t;
 
 typedef struct {
 	const char *url;
-	const char *ofn;
+	double heartbeat;
 	double max_inact;
 } wssnarf_param_t;
 
 
-extern wssnarf_t make_wssnarf(wssnarf_param_t);
+extern wssnarf_t make_wssnarf(const char *logfile);
 extern void free_wssnarf(wssnarf_t);
 extern int run_wssnarf(wssnarf_t);
+
+extern int wssnarf_log(wssnarf_t, const char *msg, size_t msz);
+
+/* to add another socket */
+extern int add_wssnarf(wssnarf_t, wssnarf_param_t);
 
 
 /* to be implemented by clients */
@@ -57,6 +62,7 @@ extern int joind_coin(const char *rsp, size_t rsz);
 /* will be called every TIMEOUT seconds */
 extern int heartbeat(ws_t);
 
+/* will be called with every complete message buffer */
 extern size_t massage(char *restrict buf, size_t bsz);
 
 #endif	/* INCLUDED_wssnarf_h_ */

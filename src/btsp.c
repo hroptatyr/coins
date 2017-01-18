@@ -78,13 +78,6 @@ xmemmem(const char *hay, const size_t hayz, const char *ndl, const size_t ndlz)
 	return NULL;
 }
 
-static inline size_t
-memnmove(char *tgt, const char *src, size_t zrc)
-{
-	memmove(tgt, src, zrc);
-	return zrc;
-}
-
 static char*
 next_data(const char *buf, size_t bsz)
 {
@@ -242,7 +235,9 @@ main(int argc, char *argv[])
 	}
 
 	/* obtain a loop */
-	wss = make_wssnarf((wssnarf_param_t){API_URL, "prices"});
+	wss = make_wssnarf("prices");
+
+	add_wssnarf(wss, (wssnarf_param_t){API_URL, 0.0, 30.0});
 
 	/* run the loop */
 	run_wssnarf(wss);
