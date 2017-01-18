@@ -42,7 +42,10 @@ struct ws_s {
 	union {
 		/* frame leftovers */
 		wsfr_t frml;
-		const char *url;
+		struct {
+			const char *host;
+			size_t hstz;
+		};
 	};
 };
 
@@ -310,7 +313,15 @@ ws_open(const char *url)
 		goto nil;
 	}
 	/* stash proto */
-	ws->p = p;
+	switch ((ws->p = p)) {
+	default:
+		break;
+	case WS_PROTO_REST:
+		/* don't call nothing yet */
+		ws->host = strdup(host);
+		ws->hstz = strlen(host);
+		return ws;
+	}
 	/* fiddle with the port param again */
 	if (UNLIKELY(on != 0)) {
 		*on = ':';
@@ -334,6 +345,13 @@ ws_close(ws_t ws)
 		close_tls(ws->c);
 	} else {
 		close(ws->s);
+	}
+	switch (ws->p) {
+	default:
+		break;
+	case WS_PROTO_REST:
+		free(deconst(ws->host));
+		break;
 	}
 	*ws = (struct ws_s){.s = -1};
 	free(ws);
@@ -369,10 +387,6 @@ ws_recv(ws_t ws, void *restrict buv, size_t bsz, int flags)
 		nrd += recv(ws->s, buf + nrd, bsz - nrd, flags);
 	}
 	if (UNLIKELY(nrd <= 0)) {
-		return nrd;
-	}
-
-	if (UNLIKELY(ws->p == WS_PROTO_REST)) {
 		return nrd;
 	}
 
@@ -590,6 +604,125 @@ ws_pong(ws_t ws, const void *msg, size_t msz)
 		return (tls_send(ws->c, pong, ponz, 0) >= 0) - 1U;
 	}
 	return (send(ws->s, pong, ponz, 0) >= 0) - 1U;
+}
+
+ssize_t
+rest_recv(ws_t ws, void *restrict buv, size_t bsz, int flags)
+{
+/* we guarantee that a whole message ends in \n */
+#define HDR_SEEN	1U
+#define LEN_SEEN	2U
+#define ENC_SEEN	4U
+	char *restrict buf = buv;
+	ssize_t nrd = 0;
+
+	if (ws->c) {
+		nrd = tls_recv(ws->c, buf, bsz, flags);
+	} else {
+		nrd = recv(ws->s, buf, bsz, flags);
+	}
+	if (UNLIKELY(nrd <= 0)) {
+		return -1;
+	}
+	/* see if we need to snarf headers first */
+	if (!ws->state) {
+		/* ah, headers innit */
+		static const char clen1[] = "Content-Length:";
+		static const char clen2[] = "Transfer-Encoding:";
+		const char *p;
+
+		if ((p = xmemmem(buf, nrd, clen1, strlenof(clen1)))) {
+			/* couldn't be more perfect */
+			ws->togo = strtoul(p, NULL, 10);
+			ws->state |= LEN_SEEN;
+		} else if ((p = xmemmem(buf, nrd, clen2, strlenof(clen2)))) {
+			/* chunked, shit */
+			ws->togo = 0U;
+			ws->state |= ENC_SEEN;
+		}
+	}
+	if (!(ws->state & HDR_SEEN)) {
+		const char *p;
+
+		if (UNLIKELY(!(p = xmemmem(buf, nrd, "\r\n\r\n", 4U)))) {
+			/* just forget about it all */
+			return 0;
+		} else if ((nrd -= p - buf)) {
+			memmove(buf, p, nrd);
+			ws->state |= HDR_SEEN;
+		}
+	}
+
+	if (ws->state & LEN_SEEN) {
+		if (nrd < ws->togo) {
+			ws->togo -= nrd;
+		} else {
+			/* otherwise we've seen it all */
+			nrd = ws->togo;
+			ws->togo = 0U;
+			ws->state = 0U;
+			/* finalise */
+			buf[nrd++] = '\n';
+		}
+	} else if (ws->state & ENC_SEEN) {
+		if (!ws->togo) {
+			char *on;
+			ws->togo = strtoul(buf, &on, 16U);
+			if (!ws->togo || *on++ != '\r' || *on++ != '\n') {
+				/* god knows */
+				ws->state = 0;
+				nrd = 0;
+				/* finalise */
+				buf[nrd++] = '\n';
+				return nrd;
+			} else {
+				nrd -= on - buf;
+				memmove(buf, on, nrd);
+			}
+		}
+
+		if (nrd < ws->togo) {
+			ws->togo -= nrd;
+		} else {
+			nrd = ws->togo;
+			ws->togo = 0U;
+		}
+	}
+	return nrd;
+}
+
+ssize_t
+rest_send(ws_t ws, const char *url, size_t urz, int flags)
+{
+	static const char rest_req[] = "\
+User-Agent: Mozilla/4.0\r\n\
+\r\n";
+	size_t nrq = 0U;
+	ssize_t nwr;
+
+	if (UNLIKELY(ws->p != WS_PROTO_REST)) {
+		return -1;
+	}
+
+	nrq += memncpy(gbuf + nrq, "GET ", 4U);
+	nrq += memncpy(gbuf + nrq, url, urz);
+	gbuf[nrq++] = ' ';
+	nrq += memncpy(gbuf + nrq, "HTTP/1.1\r\nHost: ", 16U);
+	nrq += memncpy(gbuf + nrq, ws->host, ws->hstz);
+	gbuf[nrq++] = '\r';
+	gbuf[nrq++] = '\n';
+	nrq += memncpy(gbuf + nrq, rest_req, strlenof(rest_req));
+
+	fwrite(gbuf, 1, nrq, stderr);
+	if (ws->c) {
+		nwr = tls_send(ws->c, gbuf, nrq, flags);
+	} else {
+		nwr = send(ws->s, gbuf, nrq, flags);
+	}
+	/* reset state */
+	ws->state = 0U;
+	ws->togo = 0U;
+	return nwr;
 }
 
 /* ws.c ends here */

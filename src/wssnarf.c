@@ -312,6 +312,42 @@ unroll:
 }
 
 static void
+rest_cb(EV_P_ ev_io *w, int UNUSED(revents))
+{
+/* we know that w is part of the coin_ctx_s structure */
+	wssnarf_t ctx = w->data;
+	size_t maxr = sizeof(gbuf) - gbof;
+	ssize_t nrd;
+	ssize_t npr;
+
+	if ((nrd = rest_recv(ctx->ws, gbuf + gbof, maxr, 0)) < 0) {
+		/* connexion reset or something? */
+		serror("recv(%d) failed, read %zi", w->fd, nrd);
+		/* stop the watcher */
+		ev_io_stop(EV_A_ ctx->watcher);
+
+		/* shutdown the network socket */
+		if (ctx->ws != NULL) {
+			ws_close(ctx->ws);
+		}
+		ctx->ws = NULL;
+	}
+
+#if 1
+/* debugging */
+	fprintf(stderr, "REST (%u) read %zu+%zi/%zu bytes\n", ctx->st, gbof, nrd, maxr);
+#endif	/* 1 */
+
+	/* advance gbof */
+	gbof += nrd;
+	/* log him */
+	npr = logwss(ctx->logfd, gbuf + INI_GBOF, gbof - INI_GBOF);
+	memnmove(gbuf + INI_GBOF, gbuf + INI_GBOF + npr, gbof - npr);
+	gbof -= npr;
+	return;
+}
+
+static void
 midnight_cb(EV_PU_ ev_periodic *UNUSED(w), int UNUSED(r))
 {
 	wssnarf_t ctx = w->data;
@@ -364,7 +400,19 @@ open_coin(EV_P_ wssnarf_t ctx)
 		return -1;
 	}
 
-	ev_io_init(ctx->watcher, ws_cb, ws_fd(ctx->ws), EV_READ);
+	switch (ws_proto(ctx->ws)) {
+	case WS_PROTO_RAW:
+	case WS_PROTO_WAMP:
+		ev_io_init(ctx->watcher, ws_cb, ws_fd(ctx->ws), EV_READ);
+		break;
+	case WS_PROTO_REST:
+		ev_io_init(ctx->watcher, rest_cb, ws_fd(ctx->ws), EV_READ);
+		break;
+	default:
+		errno = 0, serror("Error: unknown protocol");
+		ws_close(ctx->ws);
+		return -1;
+	}
 	ev_io_start(EV_A_ ctx->watcher);
 	ctx->watcher->data = ctx;
 	return 1;
@@ -603,6 +651,13 @@ run_wssnarf(wssnarf_t UNUSED(ctx))
 	EV_P = ev_default_loop(0);
 	/* work */
 	ev_run(EV_A_ 0);
+	return 0;
+}
+
+int
+wssnarf_log(wssnarf_t ctx, const char *buf, size_t bsz)
+{
+	loghim(ctx->logfd, buf, bsz);
 	return 0;
 }
 

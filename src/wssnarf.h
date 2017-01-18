@@ -18,6 +18,8 @@ extern wssnarf_t make_wssnarf(wssnarf_param_t);
 extern void free_wssnarf(wssnarf_t);
 extern int run_wssnarf(wssnarf_t);
 
+extern int wssnarf_log(wssnarf_t, const char *msg, size_t msz);
+
 
 /* to be implemented by clients */
 /* if <0 connection should be considered unsuccessful,
@@ -57,6 +59,7 @@ extern int joind_coin(const char *rsp, size_t rsz);
 /* will be called every TIMEOUT seconds */
 extern int heartbeat(ws_t);
 
+/* will be called with every complete message buffer */
 extern size_t massage(char *restrict buf, size_t bsz);
 
 #endif	/* INCLUDED_wssnarf_h_ */

@@ -22,6 +22,9 @@ extern ssize_t ws_send(ws_t, const void *buf, size_t bsz, int flags);
 extern int ws_ping(ws_t ws, const void *msg, size_t msz);
 extern int ws_pong(ws_t ws, const void *msg, size_t msz);
 
+extern ssize_t rest_recv(ws_t, void *restrict buv, size_t bsz, int flags);
+extern ssize_t rest_send(ws_t, const char *rsrc, size_t rsrz, int flags);
+
 
 /* inlines */
 static inline int
