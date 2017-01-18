@@ -92,7 +92,7 @@ plxwss_LDFLAGS = $(AM_LDFLAGS)
 plxwss_LDFLAGS += $(ev_LIBS)
 plxwss_LDFLAGS += $(ws_LIBS)
 plxwss_LDFLAGS += -lcurl
-plxwss_LDADD = libws.a
+plxwss_LDADD = libcoins.a libws.a
 BUILT_SOURCES += plxwss.yucc
 
 bin_PROGRAMS += plx2b
