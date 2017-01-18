@@ -156,20 +156,6 @@ close_sock(int fd)
 }
 
 
-static inline size_t
-memncpy(char *restrict tgt, const char *src, size_t zrc)
-{
-	memcpy(tgt, src, zrc);
-	return zrc;
-}
-
-static inline size_t
-memnmove(char *tgt, const char *src, size_t zrc)
-{
-	memmove(tgt, src, zrc);
-	return zrc;
-}
-
 static int
 loghim(const char *buf, size_t len)
 {

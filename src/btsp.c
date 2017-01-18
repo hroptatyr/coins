@@ -78,13 +78,6 @@ xmemmem(const char *hay, const size_t hayz, const char *ndl, const size_t ndlz)
 	return NULL;
 }
 
-static inline size_t
-memnmove(char *tgt, const char *src, size_t zrc)
-{
-	memmove(tgt, src, zrc);
-	return zrc;
-}
-
 static char*
 next_data(const char *buf, size_t bsz)
 {

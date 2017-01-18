@@ -41,13 +41,6 @@ serror(const char *fmt, ...)
 	return;
 }
 
-static inline size_t
-memncpy(void *restrict tgt, const void *src, size_t zrc)
-{
-	memcpy(tgt, src, zrc);
-	return zrc;
-}
-
 static char*
 xmemmem(const char *hay, const size_t hayz, const char *ndl, const size_t ndlz)
 {

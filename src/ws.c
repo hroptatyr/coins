@@ -50,20 +50,6 @@ struct ws_s {
 static char *gbuf;
 static size_t gbsz;
 
-static inline size_t
-memncpy(void *restrict buf, const void *src, size_t zrc)
-{
-	memcpy(buf, src, zrc);
-	return zrc;
-}
-
-static inline size_t
-memnmove(void *tgt, const void *src, size_t zrc)
-{
-	memmove(tgt, src, zrc);
-	return zrc;
-}
-
 static char*
 xmemmem(const char *hay, const size_t hayz, const char *ndl, const size_t ndlz)
 {

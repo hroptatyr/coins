@@ -92,4 +92,18 @@ deconst(const void *cp)
 	return tmp.p;
 }
 
+static inline size_t
+memncpy(void *restrict buf, const void *src, size_t zrc)
+{
+	memcpy(buf, src, zrc);
+	return zrc;
+}
+
+static inline size_t
+memnmove(void *tgt, const void *src, size_t zrc)
+{
+	memmove(tgt, src, zrc);
+	return zrc;
+}
+
 #endif	/* INCLUDED_nifty_h_ */

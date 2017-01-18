@@ -24,14 +24,6 @@ static const char *const *subs;
 static size_t nsubs;
 
 
-static inline size_t
-memncpy(char *restrict tgt, const char *src, size_t zrc)
-{
-	memcpy(tgt, src, zrc);
-	return zrc;
-}
-
-
 int
 join_coin(ws_t ws)
 {

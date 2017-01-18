@@ -88,13 +88,6 @@ xmemmem(const char *hay, const size_t hayz, const char *ndl, const size_t ndlz)
 	return NULL;
 }
 
-static inline size_t
-memncpy(char *restrict tgt, const char *src, size_t zrc)
-{
-	(void)memcpy(tgt, src, zrc);
-	return zrc;
-}
-
 static ssize_t
 tvtostr(char *restrict buf, size_t bsz, tv_t t)
 {
