@@ -8,6 +8,8 @@ typedef struct ws_s *ws_t;
 typedef enum {
 	WS_PROTO_RAW,
 	WS_PROTO_WAMP,
+	WS_PROTO_SIO1,
+	WS_PROTO_SIO3,
 	WS_PROTO_REST,
 } ws_proto_t;
 
