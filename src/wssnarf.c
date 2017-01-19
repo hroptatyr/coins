@@ -319,6 +319,105 @@ unroll:
 }
 
 static void
+sio3_cb(EV_P_ ev_io *w, int UNUSED(revents))
+{
+/* we know that w is part of the coin_ctx_s structure */
+	wssnarf_t ctx = w->data;
+	const size_t idx = w - ctx->watcher;
+	size_t xn = ctx->sbuf[idx].n;
+	size_t xz = ctx->sbuf[idx].z;
+	char *xp = ctx->sbuf[idx].p;
+	ssize_t nrd;
+
+	/* check if there's still room for, say, 4000U bytes */
+	if (UNLIKELY(xz < xn + 4000U)) {
+		const size_t nuz = (xz * 2U) ?: 4096U;
+		ctx->sbuf[idx].p = xp = realloc(xp, nuz);
+		ctx->sbuf[idx].z = xz = nuz;
+	}
+
+	if ((nrd = ws_recv(ctx->ws[idx], xp + xn, xz - xn, 0)) <= 0) {
+		/* connexion reset or something? */
+		serror("recv(%d) failed, read %zi", w->fd, nrd);
+		goto unroll;
+	}
+
+#if 1
+/* debugging */
+	fprintf(stderr, "WS[%zu](%u) read %zu+%zi/%zu bytes\n", idx, ctx->st[idx], xn, nrd, xz);
+#endif	/* 1 */
+
+	/* advance gbof */
+	xn += nrd;
+	switch (ctx->st[idx]) {
+		ssize_t npr;
+		int r;
+
+	case COIN_ST_UNK:
+		ctx->st[idx] = COIN_ST_CONN;
+	case COIN_ST_CONN:
+		/* we've got a cb whilst authing,
+		 * see what the authd predicate has to say */
+		if ((r = connd_coin(xp + INI_GBOF, xn - INI_GBOF)) < 0) {
+			/* complete failue */
+			goto logunr;
+		}
+		/* see if we can upgrade the connection */
+		ctx->st[idx] += (coin_st_t)(r > 0);
+	case COIN_ST_CONND:
+		ws_send(ctx->ws[idx], "2probe", 6U, 0);
+		goto log;
+
+	case COIN_ST_AUTH:
+		/* we've got a cb whilst authing,
+		 * see what the authd predicate has to say */
+		if ((r = authd_coin(xp + INI_GBOF, xn - INI_GBOF)) < 0) {
+			/* complete failue */
+			goto logunr;
+		}
+		/* see if we can upgrade the connection */
+		ctx->st[idx] += (coin_st_t)(r > 0);
+	case COIN_ST_AUTHD:
+		ws_send(ctx->ws[idx], "5", 1U, 0);
+		goto log;
+
+	case COIN_ST_JOIN:
+		/* see what they say about the joinedness */
+		if ((r = joind_coin(xp + INI_GBOF, xn - INI_GBOF)) < 0) {
+			/* complete failue */
+			goto logunr;
+		}
+		/* see if we can upgrade the connection */
+		ctx->st[idx] += (coin_st_t)(r > 0);
+	case COIN_ST_JOIND:
+	log:
+		/* log him */
+		npr = logwss(ctx->logfd, xp + INI_GBOF, xn - INI_GBOF);
+		memmove(xp + INI_GBOF, xp + INI_GBOF + npr, xn - npr);
+		xn -= npr;
+
+		/* keep a reference of our time stamp */
+		ctx->last_act[idx] = *tsp;
+		break;
+
+	default:
+		xn = INI_GBOF;
+		break;
+	}
+
+	ctx->sbuf[idx].n = xn;
+	return;
+
+logunr:
+	logwss(ctx->logfd, xp + INI_GBOF, xn + nrd - INI_GBOF);
+unroll:
+	/* connection reset */
+	loghim(ctx->logfd, "restart", 7U);
+	ev_break(EV_A_ EVBREAK_ALL);
+	return;
+}
+
+static void
 rest_cb(EV_P_ ev_io *w, int UNUSED(revents))
 {
 /* we know that w is part of the coin_ctx_s structure */
@@ -419,7 +518,7 @@ open_coin(EV_P_ wssnarf_t ctx, size_t idx)
 /* this init process is two part: request a token, then do the subscriptions */
 	fprintf(stderr, "INIT\n");
 	ev_timer_again(EV_A_ &ctx->timer[idx]);
-	if ((ctx->ws[idx] = ws_open(ctx->p[idx].url)) < 0) {
+	if ((ctx->ws[idx] = ws_open(ctx->p[idx].url)) == NULL) {
 		serror("Error: cannot connect");
 		/* better retry */
 		return -1;
@@ -428,14 +527,19 @@ open_coin(EV_P_ wssnarf_t ctx, size_t idx)
 	switch (ws_proto(ctx->ws[idx])) {
 	case WS_PROTO_RAW:
 	case WS_PROTO_WAMP:
+	case WS_PROTO_SIO1:
 		ev_io_init(&ctx->watcher[idx], ws_cb, ws_fd(ctx->ws[idx]), EV_READ);
 		break;
 	case WS_PROTO_REST:
 		ev_io_init(&ctx->watcher[idx], rest_cb, ws_fd(ctx->ws[idx]), EV_READ);
 		break;
+	case WS_PROTO_SIO3:
+		ev_io_init(&ctx->watcher[idx], sio3_cb, ws_fd(ctx->ws[idx]), EV_READ);
+		break;
 	default:
 		errno = 0, serror("Error: unknown protocol");
 		ws_close(ctx->ws[idx]);
+		ctx->ws[idx] = NULL;
 		return -1;
 	}
 	ev_io_start(EV_A_ &ctx->watcher[idx]);

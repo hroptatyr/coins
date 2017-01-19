@@ -52,6 +52,8 @@ struct ws_s {
 
 static char *gbuf;
 static size_t gbsz;
+/* reference count */
+static size_t gbrc;
 
 static char*
 xmemmem(const char *hay, const size_t hayz, const char *ndl, const size_t ndlz)
@@ -169,6 +171,133 @@ nil:
 }
 
 static ssize_t
+_sioi(char *restrict buf, size_t bsz, ws_t ws, const char *host)
+{
+	static const char rsrc1[] = "\
+GET /socket.io/1/ HTTP/1.1\r\n\
+Host: ";
+	static const char rsrc3[] = "\
+GET /socket.io/?EIO=3&transport=polling HTTP/1.1\r\n\
+Host: ";
+	static const char req[] = "\
+User-Agent: Dark Ninja Secret/1.0\r\n\
+Accept: */*\r\n\
+\r\n\
+";
+	char sidbuf[64U];
+	const char *sid;
+	size_t siz;
+	size_t nrq = 0U;
+	ssize_t nrd;
+
+	switch (ws->p) {
+	case WS_PROTO_SIO1:
+		nrq += memncpy(gbuf + nrq, rsrc1, strlenof(rsrc1));
+		break;
+	case WS_PROTO_SIO3:
+		nrq += memncpy(gbuf + nrq, rsrc3, strlenof(rsrc3));
+		break;
+	}
+	nrq += memncpy(gbuf + nrq, host, strlen(host));
+	gbuf[nrq++] = '\r';
+	gbuf[nrq++] = '\n';
+	nrq += memncpy(gbuf + nrq, req, strlenof(req));
+
+	fwrite(gbuf, 1, nrq, stderr);
+	if (ws->c) {
+		tls_send(ws->c, gbuf, nrq, 0);
+	} else {
+		send(ws->s, gbuf, nrq, 0);
+	}
+
+	const char *eoh;
+	do {
+		if (ws->c) {
+			nrd = tls_recv(ws->c, gbuf, gbsz, 0);
+		} else {
+			nrd = recv(ws->s, gbuf, gbsz, 0);
+		}
+	} while (nrd > 0 && (eoh = xmemmem(gbuf, nrd, "\r\n\r\n", 4U)) == NULL);
+chk:
+	if (nrd <= 0 || (nrd -= eoh - gbuf) < 0) {
+		return -1;
+	} else if (nrd == 0) {
+		/* just one more read */
+		if (ws->c) {
+			nrd = tls_recv(ws->c, gbuf, gbsz, 0);
+		} else {
+			nrd = recv(ws->s, gbuf, gbsz, 0);
+		}
+		eoh = gbuf;
+		goto chk;
+	}
+
+	/* search for the sid */
+	switch (ws->p) {
+	case WS_PROTO_SIO1:
+		/* sio1 simply prints the sid and other stuff sep'd by : */
+		with (const char *eos = memchr(eoh, ':', nrd)) {
+			if (UNLIKELY(eos == NULL)) {
+				sid = NULL;
+				siz = 0UL;
+				break;
+			}
+			/* otherwise go back to the beginning of the buffer
+			 * or the beginning of the line (for chunked xfers) */
+			for (sid = eos; sid > eoh && sid[-1] != '\n'; sid--);
+			siz = eos - sid;
+		}
+		break;
+	case WS_PROTO_SIO3:
+		/* sio3 gives us json */
+		if ((sid = xmemmem(eoh, nrd, "\"sid\"", 5U))) {
+			const char *const eob = eoh + nrd;
+			const char *eos;
+
+			/* fast forward to : */
+			while (sid < eob && *sid++ != ':');
+			/* more */
+			while (sid < eob && *sid++ != '"');
+			for (eos = sid; eos < eob && *eos != '"'; eos++);
+			if (UNLIKELY(!(siz = eos - sid))) {
+				sid = NULL;
+			}
+		}
+		break;
+	}
+	if (UNLIKELY(sid == NULL)) {
+		fputs("Error: cannot find session id\n", stderr);
+		return -1;
+	} else if (UNLIKELY(siz >= sizeof(sidbuf) || siz >= bsz)) {
+		fputs("Error: session id exceeds buffer\n", stderr);
+		return -1;
+	}
+	memcpy(sidbuf, sid, siz);
+
+	/* massage for output */
+	sidbuf[siz] = '\n';
+	fputs("session-id: ", stderr);
+	fwrite(sidbuf, 1, siz + 1U, stderr);
+	sidbuf[siz] = '\0';
+
+	nrq = 0U;
+	switch (ws->p) {
+		static const char frq1[] = "socket.io/1/websocket/";
+		static const char frq3[] =
+			"socket.io/?EIO=3&transport=websocket&t=1234567890000&sid=";
+	case WS_PROTO_SIO1:
+		nrq += memncpy(buf + nrq, frq1, strlenof(frq1));
+		nrq += memncpy(buf + nrq, sidbuf, siz + 1U/*\nul*/);
+		break;
+	case WS_PROTO_SIO3:
+		nrq += memncpy(buf + nrq, frq3, strlenof(frq3));
+		nrq += memncpy(buf + nrq, sidbuf, siz + 1U/*\nul*/);
+		break;
+	}
+	return --nrq;
+}
+
+static ssize_t
 _init(ws_t ws, const char *host, const char *rsrc, size_t rlen)
 {
 	static const char ws_req[] = "\
@@ -189,9 +318,10 @@ User-Agent: Mozilla/4.0\r\n\
 \r\n";
 	size_t nrq = 0U;
 	ssize_t nrd;
+	ssize_t rc = 0;
 
-	nrq += memncpy(gbuf + nrq, "GET /", 5U);
-	nrq += memncpy(gbuf + nrq, rsrc, rlen);
+	nrq = memnmove(gbuf + 5U, rsrc, rlen);
+	nrq += memncpy(gbuf + 0U, "GET /", 5U);
 	gbuf[nrq++] = ' ';
 	nrq += memncpy(gbuf + nrq, "HTTP/1.1\r\nHost: ", 16U);
 	nrq += memncpy(gbuf + nrq, host, strlen(host));
@@ -200,6 +330,8 @@ User-Agent: Mozilla/4.0\r\n\
 
 	switch (ws->p) {
 	case WS_PROTO_RAW:
+	case WS_PROTO_SIO1:
+	case WS_PROTO_SIO3:
 		nrq += memncpy(gbuf + nrq, ws_req, strlenof(ws_req));
 		break;
 	case WS_PROTO_WAMP:
@@ -224,6 +356,11 @@ User-Agent: Mozilla/4.0\r\n\
 	if (UNLIKELY(nrd <= 0)) {
 		return -1;
 	}
+	/* find 101 or error */
+	if (memcmp(gbuf, "HTTP/1.1 101", 12U)) {
+		fputs("Error: protocol switch failed\n", stderr);
+		rc = -1;
+	}
 	/* find end of HTTP header and read the stuff off the wire */
 	for (const char *eoh; (eoh = xmemmem(gbuf, nrd, "\r\n\r\n", 4U));) {
 		if (ws->c) {
@@ -234,7 +371,42 @@ User-Agent: Mozilla/4.0\r\n\
 		break;
 	}
 	fwrite(gbuf, 1, nrd, stderr);
-	return nrd;
+	return rc;
+}
+
+static ws_proto_t
+guess_proto(const char *url, const char **host, int *sslp)
+{
+	ws_proto_t p = WS_PROTO_RAW;
+
+	if (0) {
+		;
+	} else if (!memcmp(url, "ws", 2U) &&
+		   (*sslp = url[2U] == 's',
+		    !memcmp(url + 2U + *sslp, "://", 3U))) {
+		p = WS_PROTO_RAW;
+		*host = url + 2U + *sslp + 3U;
+	} else if (!memcmp(url, "wamp", 4U) &&
+		   (*sslp = url[4U] == 's',
+		    !memcmp(url + 4U + *sslp, "://", 3U))) {
+		p = WS_PROTO_WAMP;
+		*host = url + 4U + *sslp + 3U;
+	} else if (!memcmp(url, "http", 4U) &&
+		   (*sslp = url[4U] == 's',
+		    !memcmp(url + 4U + *sslp, "://", 3U))) {
+		p = WS_PROTO_REST;
+		*host = url + 4U + *sslp + 3U;
+	} else if (!memcmp(url, "sio", 3U) &&
+		   (*sslp = url[4U] == 's',
+		    !memcmp(url + 4U + *sslp, "://", 3U))) {
+		p = url[3U] == '1' ? WS_PROTO_SIO1 : WS_PROTO_SIO3;
+		*host = url + 4U + *sslp + 3U;
+	} else {
+		/* otherwise assume the host right away */
+		*host = url;
+		*sslp = 0;
+	}
+	return p;
 }
 
 
@@ -243,10 +415,11 @@ ws_open(const char *url)
 {
 	size_t urz = strlen(url);
 	char buf[urz + 1U];
-	ws_proto_t p = WS_PROTO_RAW;
-	int sslp = 0;
+	ws_proto_t p;
+	int sslp;
 	const char *host;
 	const char *rsrc;;
+	size_t rlen;
 	short unsigned int port;
 	char *on;
 	ws_t ws;
@@ -255,24 +428,7 @@ ws_open(const char *url)
 	memcpy(buf, url, urz + 1U);
 
 	/* guess the proto */
-	if (0) {
-		;
-	} else if (!memcmp(buf, "ws", 2U) &&
-		   (sslp = buf[2U] == 's', !memcmp(buf + 2U + sslp, "://", 3U))) {
-		p = WS_PROTO_RAW;
-		host = buf + 2U + sslp + 3U;
-	} else if (!memcmp(buf, "wamp", 4U) &&
-		   (sslp = buf[4U] == 's', !memcmp(buf + 4U + sslp, "://", 3U))) {
-		p = WS_PROTO_WAMP;
-		host = buf + 4U + sslp + 3U;
-	} else if (!memcmp(buf, "http", 4U) &&
-		   (sslp = buf[4U] == 's', !memcmp(buf + 4U + sslp, "://", 3U))) {
-		p = WS_PROTO_REST;
-		host = buf + 4U + sslp + 3U;
-	} else {
-		/* otherwise assume the host right away */
-		host = buf;
-	}
+	p = guess_proto(buf, &host, &sslp);
 
 	/* look for the resource */
 	if (UNLIKELY((on = memchr(host, '/', buf + urz - host)) == NULL)) {
@@ -307,6 +463,8 @@ ws_open(const char *url)
 			goto nil;
 		}
 	}
+	/* inc ref count */
+	gbrc++;
 
 	/* try and establish a connection */
 	if (UNLIKELY((ws = _open(host, port, sslp)) == NULL)) {
@@ -314,12 +472,33 @@ ws_open(const char *url)
 	}
 	/* stash proto */
 	switch ((ws->p = p)) {
-	default:
+		ssize_t z;
+	case WS_PROTO_SIO1:
+	case WS_PROTO_SIO3:
+		if (UNLIKELY((z = _sioi(gbuf, gbsz, ws, host)) < 0)) {
+			goto fre;
+		}
+		/* otherwise assign resources */
+		rsrc = gbuf;
+		rlen = z;
+#if 0
+		/* close the connection and start again */
+		if (ws->c) {
+			close_tls(ws->c);
+		} else {
+			close(ws->s);
+		}
+		if (UNLIKELY((ws = _open(host, port, sslp)) == NULL)) {
+			goto nil;
+		}
+#endif
 		break;
 	case WS_PROTO_REST:
 		/* don't call nothing yet */
 		ws->host = strdup(host);
 		ws->hstz = strlen(host);
+	default:
+		rlen = buf + urz - rsrc;
 		return ws;
 	}
 	/* fiddle with the port param again */
@@ -327,7 +506,7 @@ ws_open(const char *url)
 		*on = ':';
 	}
 	/* construct the request */
-	if (UNLIKELY(_init(ws, host, rsrc, buf + urz - rsrc) < 0)) {
+	if (UNLIKELY(_init(ws, host, rsrc, rlen) < 0)) {
 		goto fre;
 	}
 	return ws;
@@ -357,7 +536,7 @@ ws_close(ws_t ws)
 	free(ws);
 
 	/* just for clarity free the global buffer too */
-	if (LIKELY(gbuf != NULL)) {
+	if (LIKELY(gbuf != NULL && !--gbrc)) {
 		free(gbuf);
 		gbuf = NULL;
 		gbsz = 0UL;

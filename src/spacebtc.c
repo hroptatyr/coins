@@ -6,20 +6,10 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdint.h>
-#include <fcntl.h>
-#include <sys/time.h>
-#include <time.h>
-#include <sys/mman.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <errno.h>
-#include <curl/curl.h>
 #include "wssnarf.h"
 #include "nifty.h"
 
-#define API_URL	"ws://wsapi.spacebtc.com/socket.io/?EIO=3&transport=polling"
+#define API_URL	"sio3://wsapi.spacebtc.com"
 static char api_url[256U] = API_URL;
 
 
@@ -143,31 +133,6 @@ massage(char *restrict buf, size_t bsz)
 }
 
 
-static ssize_t
-sid_cb(const void *data, const size_t nz, const size_t nm, void *UNUSED(clo))
-{
-	const char *sid, *eos;
-	size_t z;
-
-	if ((sid = xmemmem(data, nz * nm, "\"sid\"", 5U)) == NULL) {
-		return -1;
-	}
-	/* fast forward */
-	while (*sid++ != ':');
-	while (*sid++ != '"');
-	for (eos = sid; *eos != '"'; eos++);
-	/* otherwise upgrade to websocket and copy sid */
-	z = strlenof(API_URL) - 7U;
-	z += memncpy(api_url + z, "websocket", 9U);
-	z += memncpy(api_url + z, "&sid=", 5U);
-	z += memncpy(api_url + z, sid, eos - sid);
-	api_url[z] = '\0';	
-
-	puts(api_url);
-	return nz * nm;
-}
-
-
 #include "spacebtc.yucc"
 
 int
@@ -179,20 +144,6 @@ main(int argc, char *argv[])
 
 	if (yuck_parse(argi, argc, argv) < 0) {
 		return EXIT_FAILURE;
-	}
-
-	/* obtain a session handle first *sigh* */
-	curl_global_init(CURL_GLOBAL_ALL);
-	with (CURL *hndl = curl_easy_init()) {
-		curl_easy_setopt(hndl, CURLOPT_VERBOSE, 1L);
-		curl_easy_setopt(hndl, CURLOPT_NOPROGRESS, 1L);
-		curl_easy_setopt(hndl, CURLOPT_WRITEFUNCTION, sid_cb);
-		curl_easy_setopt(hndl, CURLOPT_USERAGENT,
-				 "Dark Secret Ninja/1.0");
-
-		curl_easy_setopt(hndl, CURLOPT_URL, api_url + 5U/*ws:...*/);
-		curl_easy_perform(hndl);
-		curl_easy_cleanup(hndl);
 	}
 
 	/* obtain a loop */
