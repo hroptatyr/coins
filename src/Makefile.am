@@ -302,6 +302,18 @@ huobi_LDFLAGS += -lcurl
 huobi_LDADD = libws.a libcoins.a
 BUILT_SOURCES += huobi.yucc
 
+bin_PROGRAMS += spacebtc
+spacebtc_SOURCES = spacebtc.c spacebtc.yuck
+spacebtc_SOURCES += version.c version.h
+spacebtc_CPPFLAGS = $(AM_CPPFLAGS)
+spacebtc_CPPFLAGS += $(ev_CFLAGS)
+spacebtc_LDFLAGS = $(AM_LDFLAGS)
+spacebtc_LDFLAGS += $(ev_LIBS)
+spacebtc_LDFLAGS += $(ws_LIBS)
+spacebtc_LDFLAGS += -lcurl
+spacebtc_LDADD = libws.a libcoins.a
+BUILT_SOURCES += spacebtc.yucc
+
 
 CLEANFILES += version.c
 EXTRA_DIST += version.c.in

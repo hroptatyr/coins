@@ -59,17 +59,17 @@ struct wssnarf_s {
 	/* number of registered sockets */
 	size_t ns;
 	/* socket context */
-	ws_t ws[8U];
-	wssnarf_param_t p[8U];
-	ev_io watcher[8U];
-	ev_timer timer[8U];
-	coin_st_t st[8U];
-	struct timespec last_act[8U];
+	ws_t ws[4U];
+	wssnarf_param_t p[4U];
+	ev_io watcher[4U];
+	ev_timer timer[4U];
+	coin_st_t st[4U];
+	struct timespec last_act[4U];
 	struct {
 		char *p;
 		size_t z;
 		size_t n;
-	} sbuf[8U];
+	} sbuf[4U];
 
 	char hostname[256U];
 

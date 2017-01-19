@@ -27,6 +27,7 @@ The following exchanges are supported:
 - fastmatch
 - bitso
 - huobi
+- spacebtc
 
 The following data providers are supported:
 - kaiko
