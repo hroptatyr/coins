@@ -35,7 +35,6 @@ coin_CPPFLAGS += $(ev_CFLAGS)
 coin_LDFLAGS = $(AM_LDFLAGS)
 coin_LDFLAGS += $(ev_LIBS)
 coin_LDFLAGS += $(ws_LIBS)
-coin_LDFLAGS += -lcurl
 coin_LDADD = libcoins.a libws.a
 BUILT_SOURCES += coin.yucc
 
@@ -91,7 +90,6 @@ plxwss_CPPFLAGS += $(ev_CFLAGS)
 plxwss_LDFLAGS = $(AM_LDFLAGS)
 plxwss_LDFLAGS += $(ev_LIBS)
 plxwss_LDFLAGS += $(ws_LIBS)
-plxwss_LDFLAGS += -lcurl
 plxwss_LDADD = libcoins.a libws.a
 BUILT_SOURCES += plxwss.yucc
 
@@ -298,7 +296,6 @@ huobi_CPPFLAGS += $(ev_CFLAGS)
 huobi_LDFLAGS = $(AM_LDFLAGS)
 huobi_LDFLAGS += $(ev_LIBS)
 huobi_LDFLAGS += $(ws_LIBS)
-huobi_LDFLAGS += -lcurl
 huobi_LDADD = libws.a libcoins.a
 BUILT_SOURCES += huobi.yucc
 
@@ -310,7 +307,6 @@ spacebtc_CPPFLAGS += $(ev_CFLAGS)
 spacebtc_LDFLAGS = $(AM_LDFLAGS)
 spacebtc_LDFLAGS += $(ev_LIBS)
 spacebtc_LDFLAGS += $(ws_LIBS)
-spacebtc_LDFLAGS += -lcurl
 spacebtc_LDADD = libws.a libcoins.a
 BUILT_SOURCES += spacebtc.yucc
 
