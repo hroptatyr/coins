@@ -90,10 +90,56 @@ auth_coin(ws_t ws)
 }
 
 int
+heartbeat(ws_t ws)
+{
+	ws_send(ws, "5", 1U, 0);
+	return 0;
+}
+
+int
 join_coin(ws_t ws)
 {
 	ws_send(ws, "5", 1U, 0);
 	return 0;
+}
+
+size_t
+massage(char *restrict buf, size_t bsz)
+{
+	const char *const eob = buf + bsz;
+	const char *x;
+	size_t t;
+
+	/* get first extent */
+	if ((x = xmemmem(buf, bsz, ",\"", 2U)) == NULL) {
+		return bsz;
+	}
+	/* initialise target pointer */
+	t = --x - buf;
+
+	for (const char *y;; x = y) {
+		/* shrink buffer, de-escaping things */
+		for (;; t++) {
+			if ((buf[t] = *++x) == '\\') {
+				/* copy next one */
+				buf[t] = *++x;
+			} else if (buf[t] == '"') {
+				/* we'done */
+				x++;
+				break;
+			}
+		}
+		/* try and find the next occurrence */
+		if ((y = xmemmem(x, eob - x, ",\"", 2U)) == NULL) {
+			/* no more hits */
+			break;
+		}
+		/* and copy in between X and Y */
+		t += memnmove(buf + t, x, --y - x);
+	}
+	/* and copy in between X and Y */
+	t += memnmove(buf + t, x, eob - x);
+	return t;
 }
 
 
