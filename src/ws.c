@@ -473,6 +473,9 @@ ws_open(const char *url)
 	/* stash proto */
 	switch ((ws->p = p)) {
 		ssize_t z;
+	default:
+		rlen = buf + urz - rsrc;
+		break;
 	case WS_PROTO_SIO1:
 	case WS_PROTO_SIO3:
 		if (UNLIKELY((z = _sioi(gbuf, gbsz, ws, host)) < 0)) {
@@ -481,24 +484,11 @@ ws_open(const char *url)
 		/* otherwise assign resources */
 		rsrc = gbuf;
 		rlen = z;
-#if 0
-		/* close the connection and start again */
-		if (ws->c) {
-			close_tls(ws->c);
-		} else {
-			close(ws->s);
-		}
-		if (UNLIKELY((ws = _open(host, port, sslp)) == NULL)) {
-			goto nil;
-		}
-#endif
 		break;
 	case WS_PROTO_REST:
 		/* don't call nothing yet */
 		ws->host = strdup(host);
 		ws->hstz = strlen(host);
-	default:
-		rlen = buf + urz - rsrc;
 		return ws;
 	}
 	/* fiddle with the port param again */
