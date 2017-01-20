@@ -310,16 +310,16 @@ spacebtc_LDFLAGS += $(ws_LIBS)
 spacebtc_LDADD = libws.a libcoins.a
 BUILT_SOURCES += spacebtc.yucc
 
-bin_PROGRAMS += urduwss
-urduwss_SOURCES = urduwss.c urduwss.yuck
-urduwss_SOURCES += version.c version.h
-urduwss_CPPFLAGS = $(AM_CPPFLAGS)
-urduwss_CPPFLAGS += $(ev_CFLAGS)
-urduwss_LDFLAGS = $(AM_LDFLAGS)
-urduwss_LDFLAGS += $(ev_LIBS)
-urduwss_LDFLAGS += $(ws_LIBS)
-urduwss_LDADD = libws.a libcoins.a
-BUILT_SOURCES += urduwss.yucc
+bin_PROGRAMS += blinkwss
+blinkwss_SOURCES = blinkwss.c blinkwss.yuck
+blinkwss_SOURCES += version.c version.h
+blinkwss_CPPFLAGS = $(AM_CPPFLAGS)
+blinkwss_CPPFLAGS += $(ev_CFLAGS)
+blinkwss_LDFLAGS = $(AM_LDFLAGS)
+blinkwss_LDFLAGS += $(ev_LIBS)
+blinkwss_LDFLAGS += $(ws_LIBS)
+blinkwss_LDADD = libws.a libcoins.a
+BUILT_SOURCES += blinkwss.yucc
 
 
 CLEANFILES += version.c
