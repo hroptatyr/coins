@@ -29,7 +29,7 @@ join_coin(ws_t ws)
 }
 
 
-#include "hitwss.yucc"
+#include "urduwss.yucc"
 
 int
 main(int argc, char *argv[])
@@ -57,4 +57,4 @@ main(int argc, char *argv[])
 	return EXIT_SUCCESS;
 }
 
-/* hitwss.c ends here */
+/* urduwss.c ends here */
