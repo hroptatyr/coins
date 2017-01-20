@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include <time.h>
 #include "jsmn.h"
 #include "hash.h"
@@ -128,6 +129,7 @@ procln(const char *line, size_t llen)
 	tv_t rt;
 	char buf[256U];
 	size_t ini = 0U;
+	bool rstp = false;
 
 	if (UNLIKELY((rt = strtotv(line, &on)) == NOT_A_TIME)) {
 		/* just skip him */
@@ -165,7 +167,7 @@ procln(const char *line, size_t llen)
 
 		/* we don't actually care about full or incr
 		 * they look the same anyway */
-		if (hx != hx_full && hx != hx_incr) {
+		if (hx != hx_incr && (rstp = true, hx != hx_full)) {
 			return -1;
 		}
 	}
@@ -213,6 +215,14 @@ procln(const char *line, size_t llen)
 			size_t vz = tok[i].end - tok[i].start;
 			ini += memncpy(buf + ini, vs, vz);
 			buf[ini++] = '\t';
+
+			if (UNLIKELY(rstp)) {
+				static const char clr[] = "clr0\t\t\n";
+				size_t clz = ini;
+
+				clz += memncpy(buf + ini, clr, strlenof(clr));
+				fwrite(buf, 1, clz, stdout);
+			}
 		} else if (hx == hx_bid && tok[++i].type == JSMN_ARRAY) {
 			sd = SIDE_BID;
 			goto arr;
