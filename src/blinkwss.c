@@ -11,35 +11,57 @@
 
 #define API_URL		"wss://api.blinktrade.com/trade/"
 
+static const char *const *subs;
+static size_t nsubs;
+static wssnarf_t wss;
+
 
 int
 join_coin(ws_t ws)
 {
-	static const char req[] = "{\
+#define PROTO_REQ	"{\
 \"MsgType\":\"V\",\
-\"MDReqID\":\"31415\",\
+\"MDReqID\":\"31416\",\
 \"SubscriptionRequestType\":\"1\",\
 \"MarketDepth\":0,\
 \"MDUpdateType\":\"1\",\
 \"MDEntryTypes\":[\"0\",\"1\",\"2\"],\
-\"Instruments\":[\"BTCPKR\"]\
-}";
-	ws_send(ws, req, strlenof(req), 0);
-	return 1;
+\"Instruments\":[\"xxxxxx\"]\
+}"
+	static char req[1024U] = PROTO_REQ;
+	size_t z = strlenof(PROTO_REQ) - 11U;
+
+	req[z++] = '[';
+	for (size_t i = 0U; i < nsubs; i++, req[z++] = ',') {
+		req[z++] = '"';
+		z += memncpy(req + z, subs[i], strlen(subs[i]));
+		req[z++] = '"';
+	}
+	/* delete last comma */
+	z -= nsubs > 0U;
+	req[z++] = ']';
+	req[z++] = '}';
+
+	wssnarf_log(wss, req, z);
+	ws_send(ws, req, z, 0);
+	return 0;
 }
 
 
-#include "urduwss.yucc"
+#include "blinkwss.yucc"
 
 int
 main(int argc, char *argv[])
 {
 	static yuck_t argi[1U];
-	wssnarf_t wss;
 
 	if (yuck_parse(argi, argc, argv) < 0) {
 		return EXIT_FAILURE;
 	}
+
+	/* memorise instrs */
+	subs = argi->args;
+	nsubs = argi->nargs;
 
 	/* obtain a loop */
 	wss = make_wssnarf("prices");
@@ -57,4 +79,4 @@ main(int argc, char *argv[])
 	return EXIT_SUCCESS;
 }
 
-/* urduwss.c ends here */
+/* blinkwss.c ends here */
