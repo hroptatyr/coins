@@ -541,7 +541,6 @@ ws_recv(ws_t ws, void *restrict buv, size_t bsz, int flags)
 	uint8_t *restrict buf = buv;
 	size_t pp = 0U, rp = 0U;
 	size_t pz;
-	wsfr_t fr;
 	ssize_t nrd;
 
 	if (UNLIKELY((nrd = -(size_t)ws->state & ws->togo))) {
@@ -569,6 +568,7 @@ ws_recv(ws_t ws, void *restrict buv, size_t bsz, int flags)
 			ws->togo -= nrd;
 			return nrd;
 		}
+		unsigned int finp = ws->frml.finp;
 		/* otherwise there's the rest of the old packet
 		 * and new packets afterwards */
 		rp = pp = ws->togo;
@@ -576,39 +576,40 @@ ws_recv(ws_t ws, void *restrict buv, size_t bsz, int flags)
 		/* finalise */
 		if (pp >= (size_t)nrd) {
 			/* no need, finalise */
-			buf[pp++] = '\n';
-			return pp;
+			buf[pp] = '\n';
+			return pp + finp;
 		}
 		/* otherwise copy over the ws frame so we can insert the
 		 * newline as indicator of a finished frame */
-		memcpy(&fr, buf + pp, sizeof(fr));
-		buf[rp++] = '\n';
+		memcpy(&ws->frml, buf + pp, sizeof(ws->frml));
+		buf[rp] = '\n';
+		rp += finp;
 		goto unpkd;
 	}
 
 again:
 	/* unpack him */
-	memcpy(&fr, buf + pp, sizeof(fr));
+	memcpy(&ws->frml, buf + pp, sizeof(ws->frml));
 unpkd:
-	switch (fr.plen) {
+	switch (ws->frml.plen) {
 	case 126U:
-		pz = be16toh(fr.plen16);
-		pp += offsetof(wsfr_t, plen16) + sizeof(fr.plen16);
+		pz = be16toh(ws->frml.plen16);
+		pp += offsetof(wsfr_t, plen16) + sizeof(ws->frml.plen16);
 		break;
 	case 127U:
 		with (uint64_t _z) {
-			memcpy(&_z, &fr.plen16, sizeof(_z));
+			memcpy(&_z, &ws->frml.plen16, sizeof(_z));
 			pz = be64toh(_z);
 		}
 		pp += offsetof(wsfr_t, mkey);
 		break;
 	default:
-		pz = fr.plen;
+		pz = ws->frml.plen;
 		pp += offsetof(wsfr_t, plen16);
 		break;
 	}
 	/* mind the masking */
-	pp += fr.mask ? sizeof(fr.mkey) : 0U;
+	pp += ws->frml.mask ? sizeof(ws->frml.mkey) : 0U;
 
 	if (pz + pp > (size_t)nrd) {
 		fprintf(stderr, "CONT?  need %zu  got %zu %zu->%zd\n", pz, nrd - pp, pp, nrd);
@@ -617,7 +618,7 @@ unpkd:
 		pz = nrd - pp;
 	}
 
-	switch (fr.code) {
+	switch (ws->frml.code) {
 	case 0x0U:
 		/* frame continuation */
 	case 0x1U:
@@ -626,7 +627,7 @@ unpkd:
 		/* binary */
 		rp += memnmove(buf + rp, buf + pp, pz);
 		buf[rp] = '\n';
-		rp += !ws->togo && fr.finp;
+		rp += !ws->togo && ws->frml.finp;
 		break;
 
 	case 0x9U:

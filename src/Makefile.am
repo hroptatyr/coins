@@ -321,6 +321,17 @@ blinkwss_LDFLAGS += $(ws_LIBS)
 blinkwss_LDADD = libws.a libcoins.a
 BUILT_SOURCES += blinkwss.yucc
 
+bin_PROGRAMS += cbix
+cbix_SOURCES = cbix.c cbix.yuck
+cbix_SOURCES += version.c version.h
+cbix_CPPFLAGS = $(AM_CPPFLAGS)
+cbix_CPPFLAGS += $(ev_CFLAGS)
+cbix_LDFLAGS = $(AM_LDFLAGS)
+cbix_LDFLAGS += $(ev_LIBS)
+cbix_LDFLAGS += $(ws_LIBS)
+cbix_LDADD = libws.a libcoins.a
+BUILT_SOURCES += cbix.yucc
+
 
 CLEANFILES += version.c
 EXTRA_DIST += version.c.in
