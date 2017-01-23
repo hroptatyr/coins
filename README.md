@@ -28,6 +28,7 @@ The following exchanges are supported:
 - bitso
 - huobi
 - spacebtc
+- cbix
 
 The following data providers are supported:
 - kaiko
