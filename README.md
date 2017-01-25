@@ -29,6 +29,7 @@ The following exchanges are supported:
 - huobi
 - spacebtc
 - cbix
+- paymium
 
 The following data providers are supported:
 - kaiko
