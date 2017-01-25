@@ -10,7 +10,6 @@
 #include "nifty.h"
 
 #define API_URL	"sio3s://paymium.com/ws"
-static char api_url[256U] = API_URL;
 
 
 static char*
@@ -82,14 +81,7 @@ auth_coin(ws_t ws)
 int
 join_coin(ws_t ws)
 {
-	ws_send(ws, "5", 1U, 0);
-	return 0;
-}
-
-int
-heartbeat(ws_t ws)
-{
-	ws_send(ws, "5", 1U, 0);
+	ws_send(ws, "40/public", 9U, 0);
 	return 0;
 }
 
