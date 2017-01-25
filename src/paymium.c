@@ -85,6 +85,13 @@ join_coin(ws_t ws)
 	return 0;
 }
 
+int
+heartbeat(ws_t ws)
+{
+	ws_send(ws, "2pong", 1U, 0);
+	return 0;
+}
+
 size_t
 massage(char *restrict buf, size_t bsz)
 {
