@@ -334,13 +334,13 @@ BUILT_SOURCES += cbix.yucc
 
 bin_PROGRAMS += paymium
 paymium_SOURCES = paymium.c paymium.yuck
-paymium_SOURCES += fix.c fix.h
 paymium_SOURCES += version.c version.h
 paymium_CPPFLAGS = $(AM_CPPFLAGS)
 paymium_CPPFLAGS += $(ev_CFLAGS)
 paymium_LDFLAGS = $(AM_LDFLAGS)
 paymium_LDFLAGS += $(ev_LIBS)
-paymium_LDADD = -lcrypto
+paymium_LDFLAGS += $(ws_LIBS)
+paymium_LDADD = libws.a libcoins.a
 BUILT_SOURCES += paymium.yucc
 
 
