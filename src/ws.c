@@ -171,13 +171,14 @@ nil:
 }
 
 static ssize_t
-_sioi(char *restrict buf, size_t bsz, ws_t ws, const char *host)
+_sioi(char *restrict buf, size_t bsz, ws_t ws, const char *host, const char *rsrc)
 {
+	static const char verb[] = "GET /";
 	static const char rsrc1[] = "\
-GET /socket.io/1/ HTTP/1.1\r\n\
+socket.io/1/ HTTP/1.1\r\n\
 Host: ";
 	static const char rsrc3[] = "\
-GET /socket.io/?EIO=3&transport=polling HTTP/1.1\r\n\
+socket.io/?EIO=3&transport=polling HTTP/1.1\r\n\
 Host: ";
 	static const char req[] = "\
 User-Agent: Dark Ninja Secret/1.0\r\n\
@@ -190,6 +191,11 @@ Accept: */*\r\n\
 	size_t nrq = 0U;
 	ssize_t nrd;
 
+	nrq += memncpy(gbuf + nrq, verb, strlenof(verb));
+	nrq += memncpy(gbuf + nrq, rsrc, strlen(rsrc));
+	if (gbuf[nrq - 1U] != '/') {
+		gbuf[nrq++] = '/';
+	}
 	switch (ws->p) {
 	case WS_PROTO_SIO1:
 		nrq += memncpy(gbuf + nrq, rsrc1, strlenof(rsrc1));
@@ -280,7 +286,11 @@ chk:
 	fwrite(sidbuf, 1, siz + 1U, stderr);
 	sidbuf[siz] = '\0';
 
-	nrq = 0U;
+	/* prep resource return value */
+	nrq = memncpy(gbuf, rsrc, strlen(rsrc));
+	if (gbuf[nrq - 1U] != '/') {
+		gbuf[nrq++] = '/';
+	}
 	switch (ws->p) {
 		static const char frq1[] = "socket.io/1/websocket/";
 		static const char frq3[] =
@@ -478,7 +488,7 @@ ws_open(const char *url)
 		break;
 	case WS_PROTO_SIO1:
 	case WS_PROTO_SIO3:
-		if (UNLIKELY((z = _sioi(gbuf, gbsz, ws, host)) < 0)) {
+		if (UNLIKELY((z = _sioi(gbuf, gbsz, ws, host, rsrc)) < 0)) {
 			goto fre;
 		}
 		/* otherwise assign resources */
