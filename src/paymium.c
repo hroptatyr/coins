@@ -153,4 +153,4 @@ main(int argc, char *argv[])
 	return rc;
 }
 
-/* spacebtc.c ends here */
+/* paymium.c ends here */
