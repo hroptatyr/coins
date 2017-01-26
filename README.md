@@ -30,6 +30,7 @@ The following exchanges are supported:
 - spacebtc
 - cbix
 - paymium
+- luno
 
 The following data providers are supported:
 - kaiko

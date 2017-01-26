@@ -343,6 +343,18 @@ paymium_LDFLAGS += $(ws_LIBS)
 paymium_LDADD = libws.a libcoins.a
 BUILT_SOURCES += paymium.yucc
 
+bin_PROGRAMS += luno
+luno_SOURCES = luno.c luno.yuck
+luno_SOURCES += version.c version.h
+luno_SOURCES += ../luno_cred.h
+luno_CPPFLAGS = $(AM_CPPFLAGS)
+luno_CPPFLAGS += $(ev_CFLAGS)
+luno_LDFLAGS = $(AM_LDFLAGS)
+luno_LDFLAGS += $(ev_LIBS)
+luno_LDFLAGS += $(ws_LIBS)
+luno_LDADD = libws.a libcoins.a
+BUILT_SOURCES += luno.yucc
+
 
 CLEANFILES += version.c
 EXTRA_DIST += version.c.in

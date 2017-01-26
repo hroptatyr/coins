@@ -25,11 +25,16 @@ dist-hook:
 	cp $(top_srcdir)/dummy_cred.h $(distdir)/cex_cred.h
 	cp $(top_srcdir)/dummy_cred.h $(distdir)/okcoin_cred.h
 	cp $(top_srcdir)/dummy_cred.h $(distdir)/deribit_cred.h
+	cp $(top_srcdir)/dummy_cred.h $(distdir)/coinfl_cred.h
+	cp $(top_srcdir)/dummy_cred.h $(distdir)/luno_cred.h
 
 BUILT_SOURCES += cex_cred.h
 BUILT_SOURCES += okcoin_cred.h
+BUILT_SOURCES += deribit_cred.h
+BUILT_SOURCES += coinfl_cred.h
+BUILT_SOURCES += luno_cred.h
 EXTRA_DIST += dummy_cred.h
-cex_cred.h okcoin_cred.h deribit_cred.h: dummy_cred.h
+cex_cred.h okcoin_cred.h deribit_cred.h coinfl_cred.h luno_cred.h: dummy_cred.h
 	cp $< $@
 
 ## Makefile.am ends here
