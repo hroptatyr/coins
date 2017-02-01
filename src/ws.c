@@ -196,6 +196,9 @@ Accept: */*\r\n\
 		gbuf[nrq++] = '/';
 	}
 	nrq += memncpy(gbuf + nrq, rsrc, strlen(rsrc));
+	if (gbuf[nrq - 1U] != '/') {
+		gbuf[nrq++] = '/';
+	}
 
 	switch (ws->p) {
 	case WS_PROTO_SIO1:
