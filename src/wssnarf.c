@@ -493,6 +493,9 @@ hbeat_cb(EV_PU_ ev_timer *w, int UNUSED(revents))
 	loghim(ctx->logfd, "HEARTBEAT", 9U);
 	if (UNLIKELY(heartbeat(ctx->ws[idx]) < 0)) {
 		ctx->st[idx] = COIN_ST_NODATA;
+	} else if (tsp->tv_sec - ctx->last_act[idx].tv_sec >
+		   ctx->p[idx].max_inact) {
+		ctx->st[idx] = COIN_ST_NODATA;
 	}
 	return;
 }
