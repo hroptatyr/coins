@@ -173,7 +173,7 @@ nil:
 static ssize_t
 _sioi(char *restrict buf, size_t bsz, ws_t ws, const char *host, const char *rsrc)
 {
-	static const char verb[] = "GET /";
+	static const char verb[] = "GET ";
 	static const char rsrc1[] = "\
 socket.io/1/ HTTP/1.1\r\n\
 Host: ";
@@ -192,10 +192,11 @@ Accept: */*\r\n\
 	ssize_t nrd;
 
 	nrq += memncpy(gbuf + nrq, verb, strlenof(verb));
-	nrq += memncpy(gbuf + nrq, rsrc, strlen(rsrc));
-	if (gbuf[nrq - 1U] != '/') {
+	if (rsrc[0U] != '/') {
 		gbuf[nrq++] = '/';
 	}
+	nrq += memncpy(gbuf + nrq, rsrc, strlen(rsrc));
+
 	switch (ws->p) {
 	case WS_PROTO_SIO1:
 		nrq += memncpy(gbuf + nrq, rsrc1, strlenof(rsrc1));
@@ -330,8 +331,8 @@ User-Agent: Mozilla/4.0\r\n\
 	ssize_t nrd;
 	ssize_t rc = 0;
 
-	nrq = memnmove(gbuf + 5U, rsrc, rlen);
-	nrq += memncpy(gbuf + 0U, "GET /", 5U);
+	nrq = memnmove(gbuf + 4U + (rsrc[0U] != '/'), rsrc, rlen);
+	nrq += memncpy(gbuf + 0U, "GET /", 4U + (rsrc[0U] != '/'));
 	gbuf[nrq++] = ' ';
 	nrq += memncpy(gbuf + nrq, "HTTP/1.1\r\nHost: ", 16U);
 	nrq += memncpy(gbuf + nrq, host, strlen(host));
