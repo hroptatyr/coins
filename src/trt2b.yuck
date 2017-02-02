@@ -1,0 +1,5 @@
+Usage: trt2b < TRTWSS_STREAM
+
+Turn The Rock websocket data into level-2 book stream.
+The resulting stream will be suitable for processing with the
+books tools.

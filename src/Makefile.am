@@ -221,6 +221,13 @@ trtwss_LDFLAGS += $(ws_LIBS)
 trtwss_LDADD = libcoins.a libws.a
 BUILT_SOURCES += trtwss.yucc
 
+bin_PROGRAMS += trt2b
+trt2b_SOURCES = trt2b.c trt2b.yuck
+trt2b_SOURCES += jsmn.c jsmn.h
+trt2b_SOURCES += hash.c hash.h
+trt2b_SOURCES += version.c version.h
+BUILT_SOURCES += trt2b.yucc
+
 bin_PROGRAMS += gemini
 gemini_SOURCES = gemini.c gemini.yuck
 gemini_SOURCES += version.c version.h
