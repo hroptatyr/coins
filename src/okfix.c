@@ -477,7 +477,7 @@ main(int argc, char *argv[])
 	ev_signal_start(EV_A_ sigterm_watcher);
 
 	/* start the heartbeat timer */
-	ev_timer_init(hbeat, hbeat_cb, 30.0, 30.0);
+	ev_timer_init(hbeat, hbeat_cb, 10.0, 10.0);
 	ev_timer_start(EV_A_ hbeat);
 
 	/* the midnight tick for file rotation, also upon sighup */
