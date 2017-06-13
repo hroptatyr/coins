@@ -20,7 +20,7 @@
 #include "fix.h"
 #include "tls.h"
 
-#define API_HOST	"api.okcoin.com"
+#define API_HOST	"fix.okex.com"
 #define API_PORT	9880
 
 #define TCOMP_ID	"OKSERVER"
