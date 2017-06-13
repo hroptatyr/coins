@@ -291,25 +291,6 @@ Error: ssl write %d", tls_errno(sc, nwr));
 	return 0;
 }
 
-static int
-fix_hbeat(void)
-{
-	char buf[1536U];
-	size_t len;
-	int nwr;
-
-	len = fix_render(buf, sizeof(buf), (fix_msg_t){"0"});
-
-	if (UNLIKELY(sc == NULL)) {
-		;
-	} else if (UNLIKELY((nwr = tls_send(sc, buf, len, 0)) <= 0)) {
-		errno = 0, serror("\
-Error: ssl write %d", tls_errno(sc, nwr));
-	}
-	buf_print(buf, len);
-	return 0;
-}
-
 static bool
 fix_weekend_p(fix_msg_t m)
 {
@@ -429,14 +410,6 @@ sigint_cb(EV_P_ ev_signal *UNUSED(w), int UNUSED(revents))
 }
 
 static void
-hbeat_cb(EV_P_ ev_timer *UNUSED(w), int UNUSED(revents))
-{
-	(void)EV_A;
-	fix_hbeat();
-	return;
-}
-
-static void
 midnight_cb(EV_P_ ev_periodic *UNUSED(w), int UNUSED(r))
 {
 	(void)EV_A;
@@ -455,7 +428,6 @@ main(int argc, char *argv[])
 	ev_signal sigint_watcher[1U];
 	ev_signal sigterm_watcher[1U];
 	ev_periodic midnight[1];
-	ev_timer hbeat[1U];
 	ev_io beef[1U];
 	int rc = 0;
 
@@ -475,10 +447,6 @@ main(int argc, char *argv[])
 	ev_signal_start(EV_A_ sigint_watcher);
 	ev_signal_init(sigterm_watcher, sigint_cb, SIGTERM);
 	ev_signal_start(EV_A_ sigterm_watcher);
-
-	/* start the heartbeat timer */
-	ev_timer_init(hbeat, hbeat_cb, 10.0, 10.0);
-	ev_timer_start(EV_A_ hbeat);
 
 	/* the midnight tick for file rotation, also upon sighup */
 	ev_periodic_init(midnight, midnight_cb, MIDNIGHT, ONE_DAY, NULL);
@@ -518,7 +486,6 @@ Error: cannot connect");
 
 	ev_signal_stop(EV_A_ sigint_watcher);
 	ev_signal_stop(EV_A_ sigterm_watcher);
-	ev_timer_stop(EV_A_ hbeat);
 	ev_periodic_stop(EV_A_ midnight);
 
 	close(logfd);
