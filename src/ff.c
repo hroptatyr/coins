@@ -13,7 +13,7 @@
 #include "wssnarf.h"
 #include "nifty.h"
 
-#define API_URL		"ws://aux1.forexfactory.com:3010/"
+#define API_URL		"wss://wss.forexfactory.com:3011/"
 
 static const char *joinfile;
 
