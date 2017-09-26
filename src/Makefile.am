@@ -262,6 +262,16 @@ fast_LDFLAGS += $(ws_LIBS)
 fast_LDADD = libcoins.a libws.a
 BUILT_SOURCES += fast.yucc
 
+bin_PROGRAMS += fasttape
+fasttape_SOURCES = fasttape.c fasttape.yuck
+fasttape_SOURCES += version.c version.h
+fasttape_CPPFLAGS = $(AM_CPPFLAGS)
+fasttape_CPPFLAGS += $(ev_CFLAGS)
+fasttape_LDFLAGS = $(AM_LDFLAGS)
+fasttape_LDFLAGS += $(ev_LIBS)
+fasttape_LDFLAGS += $(ws_LIBS)
+fasttape_LDADD = libcoins.a libws.a
+
 bin_PROGRAMS += ff
 ff_SOURCES = ff.c ff.yuck
 ff_SOURCES += version.c version.h
