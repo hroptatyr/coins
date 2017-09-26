@@ -157,8 +157,8 @@ snarf_ins(const char *val, size_t len)
 	return INS_UNK;
 }
 
-static btsp_side_t
-UNUSED(snarf_side)(const char *val, size_t UNUSED(len))
+static __attribute__((unused)) btsp_side_t
+snarf_side(char *val, size_t UNUSED(len))
 {
 	if (LIKELY(len == 1U)) {
 		switch (*val) {
