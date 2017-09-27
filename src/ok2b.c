@@ -243,16 +243,16 @@ procln(char *ln, size_t lz)
 	msg = fix_parse(ln + prfz, lz - prfz);
 
 	switch (UINTIFY_TYP(msg.typ)) {
-	case UINTIFY_TYP("W"):	/* full refresh */
+	case UINTIFY_TYP('W'):	/* full refresh */
 		rstp = true;
-	case UINTIFY_TYP("X"):	/* inc refresh */
+	case UINTIFY_TYP('X'):	/* inc refresh */
 		route_quote(msg, ln, prfz, rstp);
 		break;
 
-	case UINTIFY_TYP("A"):
-	case UINTIFY_TYP("5"):
-	case UINTIFY_TYP("V"):
-	case UINTIFY_TYP("0"):
+	case UINTIFY_TYP('A'):
+	case UINTIFY_TYP('5'):
+	case UINTIFY_TYP('V'):
+	case UINTIFY_TYP('0'):
 		/* stuff we won't deal with in offline mode */
 		break;
 
@@ -265,7 +265,7 @@ Warning: message buggered");
 	default:
 		/* message not supported */
 		errno = 0, serror("\
-Warning: unsupported message %s", msg.typ);
+Warning: unsupported message %c", msg.typ);
 		break;
 	}
 	return 0;

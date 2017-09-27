@@ -210,7 +210,7 @@ fix_hello(void)
 
 	fix_reset();
 	len = fix_render(buf, sizeof(buf),
-			 (fix_msg_t){"A", strlenof(helo), helo});
+			 (fix_msg_t){'A', strlenof(helo), helo});
 
 	if (UNLIKELY(sc == NULL)) {
 		;
@@ -229,7 +229,7 @@ fix_gdbye(void)
 	size_t len;
 	ssize_t nwr;
 
-	len = fix_render(buf, sizeof(buf), (fix_msg_t){"5"});
+	len = fix_render(buf, sizeof(buf), (fix_msg_t){'5'});
 
 	if (UNLIKELY(sc == NULL)) {
 		;
@@ -264,7 +264,7 @@ fix_subsc(const char *sym)
 	len = strlenof(MREQ) - 8U + ssz;
 	mreq[len++] = *SOH;
 
-	len = fix_render(buf, sizeof(buf), (fix_msg_t){"V", len, mreq});
+	len = fix_render(buf, sizeof(buf), (fix_msg_t){'V', len, mreq});
 
 	if (UNLIKELY(sc == NULL)) {
 		;
@@ -279,7 +279,7 @@ Error: ssl write %d", tls_errno(sc, nwr));
 	len = strlenof(TREQ) - 8U + ssz;
 	treq[len++] = *SOH;
 
-	len = fix_render(buf, sizeof(buf), (fix_msg_t){"V", len, treq});
+	len = fix_render(buf, sizeof(buf), (fix_msg_t){'V', len, treq});
 
 	if (UNLIKELY(sc == NULL)) {
 		;
@@ -338,8 +338,8 @@ Error: ssl error %d", e);
 	msg = fix_parse(buf, nrd);
 
 	switch (UINTIFY_TYP(msg.typ)) {
-	case UINTIFY_TYP("W"):
-	case UINTIFY_TYP("X"):
+	case UINTIFY_TYP('W'):
+	case UINTIFY_TYP('X'):
 		switch (st) {
 		case OKUM_STATE_SUB:
 			break;
@@ -350,7 +350,7 @@ Warning: quote message received while nothing's been subscribed");
 		}
 		break;
 
-	case UINTIFY_TYP("A"):
+	case UINTIFY_TYP('A'):
 		switch (st) {
 		case OKUM_STATE_ON:
 		case OKUM_STATE_SUB:
@@ -367,7 +367,7 @@ Warning: logon message received while logged on already");
 			st = OKUM_STATE_SUB;
 		}
 		break;
-	case UINTIFY_TYP("5"):
+	case UINTIFY_TYP('5'):
 		/* logout, set state accordingly */
 		st = OKUM_STATE_OFF;
 		errno = 0, serror("\
@@ -389,7 +389,7 @@ Warning: message buggered");
 	default:
 		/* message not supported */
 		errno = 0, serror("\
-Warning: unsupported message %s", msg.typ);
+Warning: unsupported message %c", msg.typ);
 		break;
 	}
 	return;
