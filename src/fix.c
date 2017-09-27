@@ -78,10 +78,7 @@ fix_render(char *restrict buf, size_t bsz, fix_msg_t msg)
 
 	/* print message type */
 	buf[len++] = '3', buf[len++] = '5', buf[len++] = '=';
-	buf[len++] = msg.typ[0U];
-	if (LIKELY(!(buf[len++] = msg.typ[1U]))) {
-		len--;
-	}
+	buf[len++] = UINTIFY_TYP(msg.typ);
 	buf[len++] = *SOH;
 
 	/* print sequence number */
@@ -172,9 +169,8 @@ fix_parse(char *restrict buf, size_t bsz)
 		goto buggered;
 	}
 	/* now then, snarf message type */
-	res.typ[0U] = buf[j++];
-	res.typ[1U] = (uint8_t)(buf[j] == *SOH ? '\0' : buf[j++]);
-	res.typ[2U] = '\0', res.typ[3U] = '\0';
+	res.typ = buf[j++];
+	j += buf[j] != *SOH;
 
 	/* keep leading and trailing SOH */
 	res.msg = buf + j;

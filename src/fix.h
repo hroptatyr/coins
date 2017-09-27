@@ -12,9 +12,9 @@
 #endif	/* CHAR_BITS */
 
 typedef struct {
-#define UINTIFY_TYP(x)	((unsigned)x[0U] ^ ((unsigned)x[1U] << CHAR_BITS))
-	uint8_t typ[4U];
-	size_t len;
+#define UINTIFY_TYP(x)	((uint8_t)(x))
+	uint64_t typ:8U;
+	uint64_t len:56U;
 	const char *msg;
 } fix_msg_t;
 

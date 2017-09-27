@@ -238,7 +238,7 @@ fix_hello(void)
 
 	fix_reset();
 	len = fix_render(buf, sizeof(buf),
-			 (fix_msg_t){"A", strlenof(helo), helo});
+			 (fix_msg_t){'A', strlenof(helo), helo});
 
 	if (UNLIKELY(sc == NULL)) {
 		;
@@ -257,7 +257,7 @@ fix_gdbye(void)
 	size_t len;
 	ssize_t nwr;
 
-	len = fix_render(buf, sizeof(buf), (fix_msg_t){"5"});
+	len = fix_render(buf, sizeof(buf), (fix_msg_t){'5'});
 
 	if (UNLIKELY(sc == NULL)) {
 		;
@@ -285,7 +285,7 @@ fix_subsc(void)
 	memcpy(mreq + strlenof(mreq) - 7U, logfile, strlenof(logfile));
 
 	len = fix_render(buf, sizeof(buf),
-			 (fix_msg_t){"V", strlenof(mreq), mreq});
+			 (fix_msg_t){'V', strlenof(mreq), mreq});
 
 	if (UNLIKELY(sc == NULL)) {
 		;
@@ -304,7 +304,7 @@ fix_hbeat(void)
 	size_t len;
 	int nwr;
 
-	len = fix_render(buf, sizeof(buf), (fix_msg_t){"0"});
+	len = fix_render(buf, sizeof(buf), (fix_msg_t){'0'});
 
 	if (UNLIKELY(sc == NULL)) {
 		;
@@ -363,8 +363,8 @@ Error: ssl error %d", e);
 	msg = fix_parse(buf, nrd);
 
 	switch (UINTIFY_TYP(msg.typ)) {
-	case UINTIFY_TYP("W"):
-	case UINTIFY_TYP("X"):
+	case UINTIFY_TYP('W'):
+	case UINTIFY_TYP('X'):
 		switch (st) {
 		case BTCC_STATE_SUB:
 			break;
@@ -375,7 +375,7 @@ Warning: quote message received while nothing's been subscribed");
 		}
 		break;
 
-	case UINTIFY_TYP("A"):
+	case UINTIFY_TYP('A'):
 		switch (st) {
 		case BTCC_STATE_ON:
 		case BTCC_STATE_SUB:
@@ -390,7 +390,7 @@ Warning: logon message received while logged on already");
 		fix_subsc();
 		st = BTCC_STATE_SUB;
 		break;
-	case UINTIFY_TYP("5"):
+	case UINTIFY_TYP('5'):
 		/* logout, set state accordingly */
 		st = BTCC_STATE_OFF;
 		errno = 0, serror("\
@@ -404,7 +404,7 @@ Notice: sleeping till full hour");
 		}
 		break;
 
-	case UINTIFY_TYP("0"):
+	case UINTIFY_TYP('0'):
 		/* heartbeat, mute him */
 		break;
 
@@ -416,7 +416,7 @@ Warning: message buggered");
 	default:
 		/* message not supported */
 		errno = 0, serror("\
-Warning: unsupported message %s", msg.typ);
+Warning: unsupported message %c", msg.typ);
 		break;
 	}
 	return;

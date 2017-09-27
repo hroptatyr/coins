@@ -212,7 +212,7 @@ route_quote(fix_msg_t msg, const char *prfx, size_t prfz)
 		 * the rest seems to be top level */
 		l = sd < 2;
 		if ((in[0U] == 'X' || in[3U] == 'U') && l) {
-			l = 2U + (UINTIFY_TYP(msg.typ) == UINTIFY_TYP("X"));
+			l = 2U + (UINTIFY_TYP(msg.typ) == UINTIFY_TYP('X'));
 		}
 		/* print level */
 		buf[z++] = (char)(l ^ '0');
@@ -253,15 +253,15 @@ procln(char *ln, size_t lz)
 	msg = fix_parse(ln + prfz, lz - prfz);
 
 	switch (UINTIFY_TYP(msg.typ)) {
-	case UINTIFY_TYP("W"):	/* full refresh */
-	case UINTIFY_TYP("X"):	/* inc refresh */
+	case UINTIFY_TYP('W'):	/* full refresh */
+	case UINTIFY_TYP('X'):	/* inc refresh */
 		route_quote(msg, ln, prfz);
 		break;
 
-	case UINTIFY_TYP("A"):
-	case UINTIFY_TYP("5"):
-	case UINTIFY_TYP("V"):
-	case UINTIFY_TYP("0"):
+	case UINTIFY_TYP('A'):
+	case UINTIFY_TYP('5'):
+	case UINTIFY_TYP('V'):
+	case UINTIFY_TYP('0'):
 		/* stuff we won't deal with in offline mode */
 		break;
 
@@ -274,7 +274,7 @@ Warning: message buggered");
 	default:
 		/* message not supported */
 		errno = 0, serror("\
-Warning: unsupported message %s", msg.typ);
+Warning: unsupported message %c", msg.typ);
 		break;
 	}
 	return 0;
