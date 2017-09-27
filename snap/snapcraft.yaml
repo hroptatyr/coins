@@ -1,0 +1,37 @@
+name: coins
+version: '0.1.0.GIT'
+summary: snarfers for bitcoin and FX exchanges
+description: |
+    Command-line tools that connect to bitcoin and FX exchanges
+    via websocket or FIX.  Each exchange has its own binary.
+grade: stable
+confinement: strict
+
+apps:
+    bitfin:
+        command: bin/bitfin
+    bitfin2b:
+        command: bin/bitfin2b
+    cexwss:
+        command: bin/cexwss
+    cex2b:
+        command: bin/cex2b
+    coin:
+        command: bin/coin
+    coin2b:
+        command: bin/coin2b
+    fast:
+        command: bin/fast
+    okfix:
+        command: bin/okfix
+    ok2b:
+        command: bin/ok2b
+    hitwss:
+        command: bin/hitwss
+    hit2b:
+        command: bin/hit2b
+
+parts:
+    finner:
+        plugin: autotools
+        source: https://github.com/hroptatyr/coins.git
