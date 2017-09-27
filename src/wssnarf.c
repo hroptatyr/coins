@@ -637,6 +637,8 @@ more:
 		/* reset gbof and go for it */
 		ctx->sbuf[idx].n = INI_GBOF;
 		ctx->st[idx] = COIN_ST_CONN;
+		/* consider this channel active */
+		ctx->last_act[idx] = *tsp;
 	case COIN_ST_CONN:
 		/* initialise everything, sets the state */
 		if ((r = conn_coin(ctx->ws[idx])) < 0) {
@@ -785,6 +787,8 @@ run_wssnarf(wssnarf_t ctx)
 {
 	EV_P = ev_default_loop(0);
 
+	/* get a ref time */
+	clock_gettime(CLOCK_REALTIME_COARSE, tsp);
 	/* init */
 	init_ev(EV_A_ ctx);
 	/* work */
