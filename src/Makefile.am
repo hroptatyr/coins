@@ -291,7 +291,7 @@ kaiko_CPPFLAGS += $(ev_CFLAGS)
 kaiko_LDFLAGS = $(AM_LDFLAGS)
 kaiko_LDFLAGS += $(ev_LIBS)
 kaiko_LDFLAGS += $(ws_LIBS)
-kaiko_LDADD = libws.a libcoins.a
+kaiko_LDADD = libcoins.a libws.a
 BUILT_SOURCES += kaiko.yucc
 
 bin_PROGRAMS += bitso
@@ -302,7 +302,7 @@ bitso_CPPFLAGS += $(ev_CFLAGS)
 bitso_LDFLAGS = $(AM_LDFLAGS)
 bitso_LDFLAGS += $(ev_LIBS)
 bitso_LDFLAGS += $(ws_LIBS)
-bitso_LDADD = libws.a libcoins.a
+bitso_LDADD = libcoins.a libws.a
 BUILT_SOURCES += bitso.yucc
 
 bin_PROGRAMS += huobi
@@ -313,7 +313,7 @@ huobi_CPPFLAGS += $(ev_CFLAGS)
 huobi_LDFLAGS = $(AM_LDFLAGS)
 huobi_LDFLAGS += $(ev_LIBS)
 huobi_LDFLAGS += $(ws_LIBS)
-huobi_LDADD = libws.a libcoins.a
+huobi_LDADD = libcoins.a libws.a
 BUILT_SOURCES += huobi.yucc
 
 bin_PROGRAMS += spacebtc
@@ -324,7 +324,7 @@ spacebtc_CPPFLAGS += $(ev_CFLAGS)
 spacebtc_LDFLAGS = $(AM_LDFLAGS)
 spacebtc_LDFLAGS += $(ev_LIBS)
 spacebtc_LDFLAGS += $(ws_LIBS)
-spacebtc_LDADD = libws.a libcoins.a
+spacebtc_LDADD = libcoins.a libws.a
 BUILT_SOURCES += spacebtc.yucc
 
 bin_PROGRAMS += blinkwss
@@ -335,7 +335,7 @@ blinkwss_CPPFLAGS += $(ev_CFLAGS)
 blinkwss_LDFLAGS = $(AM_LDFLAGS)
 blinkwss_LDFLAGS += $(ev_LIBS)
 blinkwss_LDFLAGS += $(ws_LIBS)
-blinkwss_LDADD = libws.a libcoins.a
+blinkwss_LDADD = libcoins.a libws.a
 BUILT_SOURCES += blinkwss.yucc
 
 bin_PROGRAMS += cbix
@@ -346,7 +346,7 @@ cbix_CPPFLAGS += $(ev_CFLAGS)
 cbix_LDFLAGS = $(AM_LDFLAGS)
 cbix_LDFLAGS += $(ev_LIBS)
 cbix_LDFLAGS += $(ws_LIBS)
-cbix_LDADD = libws.a libcoins.a
+cbix_LDADD = libcoins.a libws.a
 BUILT_SOURCES += cbix.yucc
 
 bin_PROGRAMS += paymium
@@ -357,7 +357,7 @@ paymium_CPPFLAGS += $(ev_CFLAGS)
 paymium_LDFLAGS = $(AM_LDFLAGS)
 paymium_LDFLAGS += $(ev_LIBS)
 paymium_LDFLAGS += $(ws_LIBS)
-paymium_LDADD = libws.a libcoins.a
+paymium_LDADD = libcoins.a libws.a
 BUILT_SOURCES += paymium.yucc
 
 bin_PROGRAMS += luno
@@ -369,7 +369,7 @@ luno_CPPFLAGS += $(ev_CFLAGS)
 luno_LDFLAGS = $(AM_LDFLAGS)
 luno_LDFLAGS += $(ev_LIBS)
 luno_LDFLAGS += $(ws_LIBS)
-luno_LDADD = libws.a libcoins.a
+luno_LDADD = libcoins.a libws.a
 BUILT_SOURCES += luno.yucc
 
 
