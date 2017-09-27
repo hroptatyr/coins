@@ -35,3 +35,8 @@ parts:
     finner:
         plugin: autotools
         source: https://github.com/hroptatyr/coins.git
+        build-packages:
+            - libev-dev
+            - pkg-config
+            - libssl-dev
+            - openssl
