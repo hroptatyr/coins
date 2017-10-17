@@ -18,8 +18,8 @@
 #include "wssnarf.h"
 #include "nifty.h"
 
-#define API_URL		"ws://fastmatch.com/node/"
-#define TAP_URL		"ws://tape.fastmatch.com/node/"
+#define API_URL		"wss://fastmatch.com/node/"
+#define TAP_URL		"wss://tape.fastmatch.com/node/"
 
 static const char *const *subs;
 static size_t nsubs;
