@@ -569,7 +569,7 @@ ws_recv(ws_t ws, void *restrict buv, size_t bsz, int flags)
 		nrd += recv(ws->s, buf + nrd, bsz - nrd, flags);
 	}
 	if (UNLIKELY(nrd <= 0)) {
-		return nrd;
+		return -1;
 	}
 
 	/* we've got to deal with these cases:
