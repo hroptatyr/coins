@@ -1,0 +1,3 @@
+Usage: bncwss [INSTR]...
+
+Subscribe to INSTRs on the binance exchange.

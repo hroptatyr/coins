@@ -45,6 +45,17 @@ coin2b_SOURCES += hash.c hash.h
 coin2b_SOURCES += version.c version.h
 BUILT_SOURCES += coin2b.yucc
 
+bin_PROGRAMS += bncwss
+bncwss_SOURCES = bncwss.c bncwss.yuck
+bncwss_SOURCES += version.c version.h
+bncwss_CPPFLAGS = $(AM_CPPFLAGS)
+bncwss_CPPFLAGS += $(ev_CFLAGS)
+bncwss_LDFLAGS = $(AM_LDFLAGS)
+bncwss_LDFLAGS += $(ev_LIBS)
+bncwss_LDFLAGS += $(ws_LIBS)
+bncwss_LDADD = libcoins.a libws.a
+BUILT_SOURCES += bncwss.yucc
+
 bin_PROGRAMS += hitwss
 hitwss_SOURCES = hitwss.c hitwss.yuck
 hitwss_SOURCES += version.c version.h
