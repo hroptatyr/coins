@@ -626,10 +626,10 @@ unpkd:
 	pp += ws->frml.mask ? sizeof(ws->frml.mkey) : 0U;
 
 	if (pz + pp > (size_t)nrd) {
-		fprintf(stderr, "CONT?  need %zu  got %zu %zu->%zd\n", pz, nrd - pp, pp, nrd);
-		pz -= nrd - pp;
-		ws->togo = pz;
-		pz = nrd - pp;
+		const size_t n = nrd >= pp ? nrd - pp : 0U;
+		fprintf(stderr, "CONT?  need %zu  got %zd %zu->%zd\n", pz, nrd - pp, pp, nrd);
+		ws->togo = pz - n;
+		pz = n;
 	}
 
 	switch (ws->frml.code) {
