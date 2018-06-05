@@ -38,6 +38,9 @@ struct ws_s {
 	ssl_ctx_t c;
 	/* size to go */
 	ssize_t togo;
+	/* size done */
+	ssize_t done;
+	/* various states */
 	unsigned int state;
 	union {
 		/* frame leftovers */
@@ -423,6 +426,59 @@ guess_proto(const char *url, const char **host, int *sslp)
 	return p;
 }
 
+static __attribute__((unused)) void
+hexlog(const uint8_t *buf, const size_t bsz)
+{
+	for (size_t i = 0U; i < bsz / 16U; i++) {
+		fprintf(stderr, "%08zx ", i * 16U);
+		for (size_t j = 0U; j < 16U; j++) {
+			uint8_t x;
+			fputc(' ', stderr);
+			x = (uint8_t)(buf[i*16 + j] >> 4U);
+			fputc(x + (x < 10 ? '0' : 'W'), stderr);
+			x = (uint8_t)(buf[i*16 + j] & 0b1111U);
+			fputc(x + (x < 10 ? '0' : 'W'), stderr);
+		}
+		fputc(' ', stderr);
+		fputc('|', stderr);
+		for (size_t j = 0U; j < 16U; j++) {
+			uint8_t x = buf[i*16 + j];
+			fputc(x < ' ' || x > '~' ? '.' : x, stderr);
+		}
+		fputc('|', stderr);
+		fputc('\n', stderr);
+	}
+	fprintf(stderr, "%08zx ", (bsz / 16U) * 16U);
+	for (size_t i = (bsz / 16U) * 16U; i < bsz; i++) {
+		uint8_t x;
+		fputc(' ', stderr);
+		x = (uint8_t)(buf[i] >> 4U);
+		fputc(x + (x < 10 ? '0' : 'W'), stderr);
+		x = (uint8_t)(buf[i] & 0b1111U);
+		fputc(x + (x < 10 ? '0' : 'W'), stderr);
+	}
+	for (size_t i = bsz; i < (bsz / 16U + 1U) * 16U; i++) {
+		fputc(' ', stderr);
+		fputc(' ', stderr);
+		fputc(' ', stderr);
+	}
+	fputc(' ', stderr);
+	fputc('|', stderr);
+	for (size_t i = (bsz / 16U) * 16U; i < bsz; i++) {
+		uint8_t x = buf[i];
+		fputc(x < ' ' || x > '~' ? '.' : x, stderr);
+	}
+	fputc('|', stderr);
+	fputc('\n', stderr);
+	return;
+}
+
+static inline __attribute__((const, pure)) size_t
+min_z(size_t z1, size_t z2)
+{
+	return z1 < z2 ? z1 : z2;
+}
+
 
 ws_t
 ws_open(const char *url)
@@ -553,20 +609,20 @@ ws_recv(ws_t ws, void *restrict buv, size_t bsz, int flags)
 {
 /* we guarantee that full frames end in \n */
 	uint8_t *restrict buf = buv;
-	size_t pp = 0U, rp = 0U;
-	size_t pz;
+	/* pointer to payload in recv()'d buffer */
+	size_t pp = 0U;
+	size_t pz = 0U;
+	/* length of payload in result */
+	size_t rp = 0U;
 	ssize_t nrd;
 
-	if (UNLIKELY((nrd = -(size_t)ws->state & ws->togo))) {
-		/* replay stash from last time */
-		memncpy(buf, &ws->frml, nrd);
-		ws->togo = 0U;
-		ws->state = 0U;
-	}
+	/* unstash */
+	memncpy(buf, &ws->frml, ws->done);
+
 	if (ws->c) {
-		nrd += tls_recv(ws->c, buf + nrd, bsz - nrd, flags);
+		nrd = tls_recv(ws->c, buf + ws->done, bsz - ws->done, flags);
 	} else {
-		nrd += recv(ws->s, buf + nrd, bsz - nrd, flags);
+		nrd = recv(ws->s, buf + ws->done, bsz - ws->done, flags);
 	}
 	if (UNLIKELY(nrd <= 0)) {
 		return -1;
@@ -576,61 +632,50 @@ ws_recv(ws_t ws, void *restrict buv, size_t bsz, int flags)
 	 * - buf too small
 	 * - ws frame fragmented
 	 * - multiple ws frames in one go */
+	nrd += ws->done;
 
-	if (UNLIKELY(ws->togo)) {
-		if (nrd < ws->togo) {
-			ws->togo -= nrd;
-			return nrd;
-		}
-		unsigned int finp = ws->frml.finp;
-		/* otherwise there's the rest of the old packet
-		 * and new packets afterwards */
-		rp = pp = ws->togo;
-		ws->togo = 0U;
-		/* finalise */
-		if (pp >= (size_t)nrd) {
-			/* no need, finalise */
-			buf[pp] = '\n';
-			return pp + finp;
-		}
-		/* otherwise copy over the ws frame so we can insert the
-		 * newline as indicator of a finished frame */
-		memcpy(&ws->frml, buf + pp, sizeof(ws->frml));
-		buf[rp] = '\n';
-		rp += finp;
+	if (UNLIKELY((size_t)nrd < sizeof(ws->frml) && !ws->togo)) {
+		/* shit */
+		goto stash;
+	}
+
+	if (ws->togo) {
+		/* already got the ws framing data in WS->FRML */
 		goto unpkd;
 	}
 
 again:
 	/* unpack him */
 	memcpy(&ws->frml, buf + pp, sizeof(ws->frml));
-unpkd:
+
+	/* finalise the previous output */
+	buf[rp] = '\n';
+	rp += ws->state;
+
 	switch (ws->frml.plen) {
 	case 126U:
-		pz = be16toh(ws->frml.plen16);
+		ws->togo = be16toh(ws->frml.plen16);
 		pp += offsetof(wsfr_t, plen16) + sizeof(ws->frml.plen16);
 		break;
 	case 127U:
 		with (uint64_t _z) {
 			memcpy(&_z, &ws->frml.plen16, sizeof(_z));
-			pz = be64toh(_z);
+			ws->togo = be64toh(_z);
 		}
 		pp += offsetof(wsfr_t, mkey);
 		break;
 	default:
-		pz = ws->frml.plen;
+		ws->togo = ws->frml.plen;
 		pp += offsetof(wsfr_t, plen16);
 		break;
 	}
-	/* mind the masking */
-	pp += ws->frml.mask ? sizeof(ws->frml.mkey) : 0U;
 
-	if (pz + pp > (size_t)nrd) {
-		const size_t n = nrd >= pp ? nrd - pp : 0U;
-		fprintf(stderr, "CONT?  need %zu  got %zd %zu->%zd\n", pz, nrd - pp, pp, nrd);
-		ws->togo = pz - n;
-		pz = n;
-	}
+	/* mind the masking */
+	pp += -(size_t)ws->frml.mask & sizeof(ws->frml.mkey);
+
+unpkd:
+	pz = min_z(ws->togo, nrd - pp);
+	ws->togo -= pz;
 
 	switch (ws->frml.code) {
 	case 0x0U:
@@ -639,9 +684,10 @@ unpkd:
 		/* text */
 	case 0x2U:
 		/* binary */
+	case 0x8U:
+		/* close */
 		rp += memnmove(buf + rp, buf + pp, pz);
-		buf[rp] = '\n';
-		rp += !ws->togo && ws->frml.finp;
+		ws->state = !ws->togo && ws->frml.finp || ws->frml.code == 0x8U;
 		break;
 
 	case 0x9U:
@@ -650,33 +696,37 @@ unpkd:
 		ws_pong(ws, buf + pp, pz);
 		fputs("PONG!!!\n", stderr);
 		rp += memnmove(buf + rp, buf + pp, pz);
-		buf[rp++] = '\n';
+		ws->state = 1U;
 		break;
 	case 0xaU:
 		/* pong */
 		fputs("PONG!!!\n", stderr);
-		rp += memnmove(buf + rp, buf + pp, pz);
-		buf[rp++] = '\n';
+		ws->state = 0U;
 		break;
 
-	case 0x8U:
-		/* close */
-		rp += memnmove(buf + rp, buf + pp, pz);
-		buf[rp++] = '\n';
-		break;
 	default:
 		fputs("HUH?!?!\n", stderr);
 		abort();
 		break;
 	}
-	if ((pp += pz) + sizeof(ws->frml) < (size_t)nrd) {
+	/* advance payload pointer */
+	pp += pz;
+	if (pp + sizeof(ws->frml) >= (size_t)nrd) {
+		;
+	} else {
 		/* more frames, good for us */
 		goto again;
-	} else if (pp < (size_t)nrd) {
-		/* stuff the rest into frml and process it next */
-		ws->togo = memncpy(&ws->frml, buf + pp, nrd - pp);
-		ws->state = 1U;
 	}
+stash:
+	if (UNLIKELY(pp > (size_t)nrd)) {
+		fputs("BUGGERY\n", stderr);
+		abort();
+	}		
+	ws->done = memncpy(&ws->frml, buf + pp, nrd - pp);
+
+	/* finalise the previous output */
+	buf[rp] = '\n';
+	rp += ws->state;
 	return rp;
 }
 

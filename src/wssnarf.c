@@ -148,7 +148,7 @@ loghim(int logfd, const char *buf, size_t len)
 	memcpy(xbuf + prfz, buf, len);
 	xbuf[prfz + len++] = '\n';
 	write(logfd, xbuf, prfz + len);
-	fwrite(xbuf, 1, prfz + len, stderr);
+	fwrite(xbuf, 1, prfz + len, stdout);
 	return 0;
 }
 
@@ -171,7 +171,7 @@ logwss(int logfd, char *buf, size_t len)
 		buf[prfz - INI_GBOF + z++] = '\n';
 		z = massage(buf + prfz - INI_GBOF, z);
 		write(logfd, buf - INI_GBOF, prfz + z);
-		fwrite(buf - INI_GBOF, 1, prfz + z, stderr);
+		fwrite(buf - INI_GBOF, 1, prfz + z, stdout);
 	}
 	return lp - buf;
 }
