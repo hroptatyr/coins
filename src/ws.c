@@ -711,9 +711,7 @@ unpkd:
 	}
 	/* advance payload pointer */
 	pp += pz;
-	if (pp + sizeof(ws->frml) >= (size_t)nrd) {
-		;
-	} else {
+	if (pp + sizeof(ws->frml) < (size_t)nrd) {
 		/* more frames, good for us */
 		goto again;
 	}
