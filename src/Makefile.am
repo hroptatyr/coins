@@ -24,6 +24,7 @@ ws_LIBS = -lssl -lcrypto
 
 noinst_LIBRARIES += libcoins.a
 libcoins_a_SOURCES =
+libcoins_a_SOURCES += tinf.h tinflate.c
 libcoins_a_SOURCES += wssnarf.c
 libcoins_a_LIBADD = libws.a
 

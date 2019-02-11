@@ -11,6 +11,7 @@ typedef struct {
 	const char *url;
 	double heartbeat;
 	double max_inact;
+	unsigned int inflate:1U;
 } wssnarf_param_t;
 
 

@@ -18,6 +18,7 @@
 #undef EV_COMPAT3
 #include <ev.h>
 #include "wssnarf.h"
+#include "tinf.h"
 #include "nifty.h"
 
 #define ONE_DAY		86400.0
@@ -69,7 +70,7 @@ struct wssnarf_s {
 		char *p;
 		size_t z;
 		size_t n;
-	} sbuf[4U];
+	} sbuf[4U + 1U];
 
 	char hostname[256U];
 
@@ -220,6 +221,53 @@ rotate_outfile(wssnarf_t ctx)
 	return;
 }
 
+static __attribute__((unused)) void
+hexlog(const uint8_t *buf, const size_t bsz)
+{
+	for (size_t i = 0U; i < bsz / 16U; i++) {
+		fprintf(stderr, "%08zx ", i * 16U);
+		for (size_t j = 0U; j < 16U; j++) {
+			uint8_t x;
+			fputc(' ', stderr);
+			x = (uint8_t)(buf[i*16 + j] >> 4U);
+			fputc(x + (x < 10 ? '0' : 'W'), stderr);
+			x = (uint8_t)(buf[i*16 + j] & 0b1111U);
+			fputc(x + (x < 10 ? '0' : 'W'), stderr);
+		}
+		fputc(' ', stderr);
+		fputc('|', stderr);
+		for (size_t j = 0U; j < 16U; j++) {
+			uint8_t x = buf[i*16 + j];
+			fputc(x < ' ' || x > '~' ? '.' : x, stderr);
+		}
+		fputc('|', stderr);
+		fputc('\n', stderr);
+	}
+	fprintf(stderr, "%08zx ", (bsz / 16U) * 16U);
+	for (size_t i = (bsz / 16U) * 16U; i < bsz; i++) {
+		uint8_t x;
+		fputc(' ', stderr);
+		x = (uint8_t)(buf[i] >> 4U);
+		fputc(x + (x < 10 ? '0' : 'W'), stderr);
+		x = (uint8_t)(buf[i] & 0b1111U);
+		fputc(x + (x < 10 ? '0' : 'W'), stderr);
+	}
+	for (size_t i = bsz; i < (bsz / 16U + 1U) * 16U; i++) {
+		fputc(' ', stderr);
+		fputc(' ', stderr);
+		fputc(' ', stderr);
+	}
+	fputc(' ', stderr);
+	fputc('|', stderr);
+	for (size_t i = (bsz / 16U) * 16U; i < bsz; i++) {
+		uint8_t x = buf[i];
+		fputc(x < ' ' || x > '~' ? '.' : x, stderr);
+	}
+	fputc('|', stderr);
+	fputc('\n', stderr);
+	return;
+}
+
 
 static void
 ws_cb(EV_P_ ev_io *w, int UNUSED(revents))
@@ -292,6 +340,37 @@ ws_cb(EV_P_ ev_io *w, int UNUSED(revents))
 		ctx->st[idx] += (coin_st_t)(r > 0);
 	case COIN_ST_JOIND:
 	log:
+		if (ctx->p[idx].inflate) {
+			char *infp = ctx->sbuf[4U].p;
+			size_t infz = ctx->sbuf[4U].z;
+			int rc;
+
+			if (UNLIKELY(infz < 10U * xn)) {
+				/* resize */
+				ctx->sbuf[4U].z = infz = 10U * xn;
+				ctx->sbuf[4U].p = infp = realloc(infp, infz);
+			}
+			/* inflate, wind back xn */
+			xn -= nrd;
+			/* fast forward over whitespace */
+			nrd -= xp[xn] == '\n';
+			xn += xp[xn] == '\n';
+			rc = tinf_uncompress(infp, &infz, xp + xn, nrd);
+			if (rc < 0) {
+				fprintf(stderr, "can't inflate: %d\n", rc);
+				hexlog(xp + xn, nrd);
+				goto weird;
+			}
+			/* otherwise memcpy the stuff into the original buffer,
+			 * pretending we've got it like this */
+			if (UNLIKELY(xn + infz >= xz)) {
+				const size_t nuz = xn + infz + xz;
+				ctx->sbuf[idx].p = xp = realloc(xp, nuz);
+				ctx->sbuf[idx].z = xz = nuz;
+			}
+			memcpy(xp + xn, infp, infz);
+			xn += infz;
+		}
 		/* log him */
 		npr = logwss(ctx->logfd, xp + INI_GBOF, xn - INI_GBOF);
 		memmove(xp + INI_GBOF, xp + INI_GBOF + npr, xn - npr);
@@ -302,6 +381,7 @@ ws_cb(EV_P_ ev_io *w, int UNUSED(revents))
 		break;
 
 	default:
+	weird:
 		xn = INI_GBOF;
 		break;
 	}
@@ -776,6 +856,9 @@ free_wssnarf(wssnarf_t ctx)
 		if (LIKELY(ctx->sbuf[i].p != NULL)) {
 			free(ctx->sbuf[i].p);
 		}
+	}
+	if (ctx->sbuf[4U].p != NULL) {
+		free(ctx->sbuf[4U].p);
 	}
 	free(ctx);
 	ev_loop_destroy(EV_A);
