@@ -56,18 +56,19 @@ put_sockaddr(struct sockaddr_in *sa, const char *name, uint16_t port)
 
 /* public api */
 ssl_ctx_t
-conn_tls(int s)
+conn_tls(int s, const char *host)
 {
 	ssl_ctx_t this;
 	int rc;
 
 	(void)SSL_library_init();
 	if (UNLIKELY(sslctx == NULL &&
-		     (sslctx = SSL_CTX_new(SSLv23_client_method())) == NULL)) {
+		     (sslctx = SSL_CTX_new(TLSv1_2_client_method())) == NULL)) {
 		return NULL;
 	} else if (UNLIKELY((this = SSL_new(sslctx)) == NULL)) {
 		return NULL;
 	}
+	SSL_set_tlsext_host_name(this, host);
 	SSL_set_fd(this, s);
 	if (UNLIKELY((rc = SSL_connect(this)) < 1)) {
 		serror("\
@@ -102,7 +103,7 @@ open_tls(const char *host, short unsigned int port)
 	if (UNLIKELY(connect(s, (void*)&sa, sizeof(sa)) < 0)) {
 		goto clo;
 	}
-	if (UNLIKELY((this = conn_tls(s)) == NULL)) {
+	if (UNLIKELY((this = conn_tls(s, host)) == NULL)) {
 		goto clo;
 	}
 	return this;

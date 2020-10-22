@@ -11,7 +11,7 @@ extern ssl_ctx_t open_tls(const char *host, short unsigned int port);
 extern int close_tls(ssl_ctx_t);
 
 /* for ws.[ch] convenience */
-extern ssl_ctx_t conn_tls(int s);
+extern ssl_ctx_t conn_tls(int s, const char *host);
 
 
 static inline ssize_t

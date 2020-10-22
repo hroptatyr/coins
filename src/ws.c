@@ -159,7 +159,7 @@ _open(const char *host, short unsigned int port, int ssl)
 	if (UNLIKELY(connect(s, (void*)&sa, sizeof(sa)) < 0)) {
 		goto fre;
 	}
-	if (ssl && UNLIKELY((c = conn_tls(s)) == NULL)) {
+	if (ssl && UNLIKELY((c = conn_tls(s, host)) == NULL)) {
 		goto fre;
 	}
 	*this = (struct ws_s){.s = s, .c = c};
